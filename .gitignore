@@ -1,0 +1,7 @@
+# Build artifacts
+*.o
+bin/
+
+# Build tooling
+.cache/
+compile_commands.json
