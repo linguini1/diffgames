@@ -25,13 +25,14 @@
 #include <SDL2/SDL.h>
 
 #include "dynsys.h"
+#include "utils.h"
 
 #define TIMESTEP (0.01)
 
 const char window_name[] = "2 Pursuers vs 2 Evaders";
 const int width = 2048;
 const int height = 1024;
-const double scale = 4.0;
+const double scale = 8.0;
 
 /* State variable indexes */
 
@@ -71,12 +72,6 @@ static void game_u(double *x, size_t n, double dt);
 
 static double dist(double x1, double y1, double x2, double y2) {
   return sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
-}
-
-static double randval(double min, double max) {
-  double range = max - min;
-  double div = RAND_MAX / range;
-  return min + (rand() / div);
 }
 
 const SDL_Rect FULLSCREEN = {.x = 0, .y = 0, .w = width, .h = height};
@@ -217,7 +212,7 @@ static void player_f(double *x, double *y, double head, double vel, double dt) {
 
 /* Dynamics for all players */
 static void game_f(double *x, size_t n, double dt) {
-  (void)n;
+  unused(n);
   player_f(&x[P1_X], &x[P1_Y], x[P1_H], P1_VEL, dt);
   player_f(&x[P2_X], &x[P2_Y], x[P2_H], P2_VEL, dt);
   player_f(&x[E1_X], &x[E1_Y], x[E1_H], E1_VEL, dt);
@@ -279,8 +274,8 @@ static void opt_aimpoints(double *game_x, double *ex1, double *ey1, double *ex2,
 }
 
 static void game_u(double *x, size_t n, double dt) {
-  (void)n;
-  (void)dt;
+  unused(n);
+  unused(dt);
 
   double ex1;
   double px1;
@@ -303,8 +298,8 @@ static void game_u(double *x, size_t n, double dt) {
   x[E2_H] = atan2(ey2 - x[E2_Y], ex2 - x[E2_X]);
   x[P1_H] = atan2(py1 - x[P1_Y], px1 - x[P1_X]);
   x[P2_H] = atan2(py2 - x[P2_Y], px2 - x[P2_X]);
-  printf("E1: %lf\n", x[E1_H] * (180.0 / M_PI));
-  printf("E2: %lf\n", x[E2_H] * (180.0 / M_PI));
-  printf("P1: %lf\n", x[P1_H] * (180.0 / M_PI));
-  printf("P2: %lf\n", x[P2_H] * (180.0 / M_PI));
+  // printf("E1: %lf\n", x[E1_H] * (180.0 / M_PI));
+  // printf("E2: %lf\n", x[E2_H] * (180.0 / M_PI));
+  // printf("P1: %lf\n", x[P1_H] * (180.0 / M_PI));
+  // printf("P2: %lf\n", x[P2_H] * (180.0 / M_PI));
 }
