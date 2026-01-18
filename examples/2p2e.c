@@ -24,6 +24,7 @@
 
 #include <SDL2/SDL.h>
 
+#include "SDL_render.h"
 #include "dynsys.h"
 #include "utils.h"
 
@@ -31,8 +32,8 @@
 
 const char window_name[] = "2 Pursuers vs 2 Evaders";
 const int width = 2048;
-const int height = 1024;
-const double scale = 8.0;
+const int height = 2048;
+const double scale = 6.0;
 
 /* State variable indexes */
 
@@ -63,7 +64,7 @@ static const double RATIOS[2][2] = {
     {E1_VEL / P2_VEL, E2_VEL / P2_VEL},
 };
 
-#define CAPTURE_RADIUS (1.0)
+#define CAPTURE_RADIUS (10.0)
 
 /* Game dynamics */
 
@@ -74,7 +75,13 @@ static double dist(double x1, double y1, double x2, double y2) {
   return sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
 }
 
+/* Drawing utilities */
+
+#define CIRCLE_POINTS (10)
+
 const SDL_Rect FULLSCREEN = {.x = 0, .y = 0, .w = width, .h = height};
+
+static void draw_circle(SDL_Renderer *renderer, int cx, int cy, int radius);
 
 int main(void) {
 
@@ -174,9 +181,21 @@ int main(void) {
     SDL_RenderDrawPoint(renderer, game_x[E1_X], game_x[E1_Y]);
     SDL_RenderDrawPoint(renderer, game_x[E2_X], game_x[E2_Y]);
 
+    /* Draw pursuer capture radius in white */
+
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+    draw_circle(renderer, game_x[P1_X], game_x[P1_Y], CAPTURE_RADIUS);
+    draw_circle(renderer, game_x[P2_X], game_x[P2_Y], CAPTURE_RADIUS);
+
     /* Show what was drawn */
 
     SDL_RenderPresent(renderer);
+
+    /* Clear pursuer capture radius before next slide */
+
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+    draw_circle(renderer, game_x[P1_X], game_x[P1_Y], CAPTURE_RADIUS);
+    draw_circle(renderer, game_x[P2_X], game_x[P2_Y], CAPTURE_RADIUS);
 
     /* Advance simulation until a capture occurs */
 
@@ -297,8 +316,23 @@ static void game_u(double *x, size_t n, double dt) {
   x[E2_H] = atan2(ey2 - x[E2_Y], ex2 - x[E2_X]);
   x[P1_H] = atan2(py1 - x[P1_Y], px1 - x[P1_X]);
   x[P2_H] = atan2(py2 - x[P2_Y], px2 - x[P2_X]);
-  // printf("E1: %lf\n", x[E1_H] * (180.0 / M_PI));
-  // printf("E2: %lf\n", x[E2_H] * (180.0 / M_PI));
-  // printf("P1: %lf\n", x[P1_H] * (180.0 / M_PI));
-  // printf("P2: %lf\n", x[P2_H] * (180.0 / M_PI));
+}
+
+static void draw_circle(SDL_Renderer *renderer, int cx, int cy, int radius) {
+  SDL_Point points[CIRCLE_POINTS];
+
+  /* Calculate points */
+
+  for (unsigned i = 0; i < CIRCLE_POINTS; i++) {
+    points[i].x = cx + radius * cos((i * 2 * M_PI) / CIRCLE_POINTS);
+    points[i].y = cy + radius * sin((i * 2 * M_PI) / CIRCLE_POINTS);
+  }
+
+  /* Join points pairwise with lines */
+
+  for (unsigned i = 0; i < CIRCLE_POINTS; i++) {
+    unsigned j = (i + 1) % CIRCLE_POINTS;
+    SDL_RenderDrawLine(renderer, points[i].x, points[i].y, points[j].x,
+                       points[j].y);
+  }
 }
