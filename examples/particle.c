@@ -8,10 +8,11 @@
 
 #define TIMESTEP (0.01)
 
-const char window_name[] = "Mouse-following Particle";
-const int width = 2048;
-const int height = 1024;
-const double scale = 4.0;
+static const char window_name[] = "Mouse-following Particle";
+static const int width = 2048;
+static const int height = 1024;
+static const double scale = 4.0;
+static const SDL_Rect FULLSCREEN = {.x = 0, .y = 0, .w = width, .h = height};
 
 static int mouse_x;
 static int mouse_y;
@@ -79,7 +80,7 @@ int main(void) {
   double x[4] = {
       (width / (2 * scale)),  /* X pos */
       (height / (2 * scale)), /* Y pos */
-      20.0,                   /* Velocity */
+      50.0,                   /* Velocity */
       0,                      /* Heading */
   };
   dynsys_t particle = DYNSYS_SINIT(x, particle_f, particle_u, NULL, NULL);
@@ -119,14 +120,15 @@ int main(void) {
       }
     }
 
-    /* Clear screen to black */
+    /* Clear screen to black with opacity so trail is visible */
 
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 10);
+    SDL_RenderFillRect(renderer, &FULLSCREEN);
 
     /* Set to foreground colour (white) */
 
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
 
     /* Draw agents */
 
