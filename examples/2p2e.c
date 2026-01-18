@@ -219,57 +219,56 @@ static void game_f(double *x, size_t n, double dt) {
   player_f(&x[E2_X], &x[E2_Y], x[E2_H], E2_VEL, dt);
 }
 
-static double y_ij(unsigned i, unsigned j, double *px, double *ex, double *py,
-                   double *ey) {
-  double aij = RATIOS[i][j];
-  return (ey[j] - (aij * aij) * py[i] -
-          aij * dist(px[i], py[i], ex[j], ey[j])) /
-         (1.0 - (aij * aij));
+static double y_ij(unsigned i, unsigned j, double *xp, double *xe, double *yp,
+                   double *ye) {
+#define a(i, j) (RATIOS[i][j])
+  return (ye[j] - a(i, j) * a(i, j) * yp[i] -
+          a(i, j) * dist(xp[i], yp[i], xe[j], ye[j])) /
+         (1.0 - (a(i, j) * a(i, j)));
 }
 
-static void opt_aimpoints(double *game_x, double *ex1, double *ey1, double *ex2,
-                          double *ey2, double *px1, double *py1, double *px2,
-                          double *py2) {
-  double px[] = {game_x[P1_X], game_x[P2_X]};
-  double ex[] = {game_x[E1_X], game_x[E2_X]};
-  double py[] = {game_x[P1_Y], game_x[P2_Y]};
-  double ey[] = {game_x[E1_Y], game_x[E2_Y]};
+static void opt_aimpoints(double *game_x, double *xe1, double *ye1, double *xe2,
+                          double *ye2, double *xp1, double *yp1, double *xp2,
+                          double *yp2) {
+  double xp[] = {game_x[P1_X], game_x[P2_X]};
+  double xe[] = {game_x[E1_X], game_x[E2_X]};
+  double yp[] = {game_x[P1_Y], game_x[P2_Y]};
+  double ye[] = {game_x[E1_Y], game_x[E2_Y]};
 
-  double ys1 = y_ij(0, 0, px, ex, py, ey) + y_ij(1, 1, px, ex, py, ey);
-  double ys2 = y_ij(0, 1, px, ex, py, ey) + y_ij(1, 0, px, ex, py, ey);
+  double ys1 = y_ij(0, 0, xp, xe, yp, ye) + y_ij(1, 1, xp, xe, yp, ye);
+  double ys2 = y_ij(0, 1, xp, xe, yp, ye) + y_ij(1, 0, xp, xe, yp, ye);
+
+#define a_11 (RATIOS[0][0])
+#define a_12 (RATIOS[0][1])
+#define a_21 (RATIOS[1][0])
+#define a_22 (RATIOS[1][1])
+#define a_den(a) (1.0 - ((a) * (a)))
+#define d(i, j) dist(xp[i], yp[i], xe[j], ye[j])
 
   if (ys1 > ys2) {
     /* Equation 10 */
-    *ex1 =
-        (ex[0] - pow(RATIOS[0][0], 2) * px[0]) / (1.0 - pow(RATIOS[0][0], 2));
-    *ey1 = (ey[0] - pow(RATIOS[0][0], 2) * py[0] -
-            pow(RATIOS[0][0], 2) * dist(px[0], py[0], ex[0], ex[0])) /
-           (1.0 - pow(RATIOS[0][0], 2));
-    *ex2 =
-        (ex[1] - pow(RATIOS[1][1], 2) * px[1]) / (1.0 - pow(RATIOS[1][1], 2));
-    *ey2 = (ey[1] - pow(RATIOS[1][1], 2) * py[1] -
-            pow(RATIOS[1][1], 2) * dist(px[1], py[1], ex[1], ex[1])) /
-           (1.0 - pow(RATIOS[1][1], 2));
-    *px1 = *ex1;
-    *py1 = *ey1;
-    *px2 = *ex2;
-    *py2 = *ey2;
+    *xe1 = (xe[0] - (a_11 * a_11) * xp[0]) / a_den(a_11);
+    *ye1 =
+        (ye[0] - (a_11 * a_11) * yp[0] - (a_11 * a_11) * d(0, 0)) / a_den(a_11);
+    *xe2 = (xe[1] - (a_22 * a_22) * xp[1]) / a_den(a_22);
+    *ye2 =
+        (ye[1] - (a_22 * a_22) * yp[1] - (a_22 * a_22) * d(1, 1)) / a_den(a_22);
+    *xp1 = *xe1;
+    *yp1 = *ye1;
+    *xp2 = *xe2;
+    *yp2 = *ye2;
   } else {
     /* Equation 11 */
-    *ex1 =
-        (ex[0] - pow(RATIOS[1][0], 2) * px[1]) / (1.0 - pow(RATIOS[1][0], 2));
-    *ey1 = (ey[0] - pow(RATIOS[1][0], 2) * py[1] -
-            pow(RATIOS[1][0], 2) * dist(px[1], py[1], ex[0], ex[0])) /
-           (1.0 - pow(RATIOS[1][0], 2));
-    *ex2 =
-        (ex[1] - pow(RATIOS[0][1], 2) * px[0]) / (1.0 - pow(RATIOS[0][1], 2));
-    *ey2 = (ey[1] - pow(RATIOS[0][1], 2) * py[0] -
-            pow(RATIOS[0][1], 2) * dist(px[0], py[0], ex[1], ex[1])) /
-           (1.0 - pow(RATIOS[0][1], 2));
-    *px2 = *ex1;
-    *py2 = *ey1;
-    *px1 = *ex2;
-    *py1 = *ey2;
+    *xe1 = (xe[0] - (a_21 * a_21) * xp[1]) / a_den(a_21);
+    *ye1 =
+        (ye[0] - (a_21 * a_21) * yp[1] - (a_21 * a_21) * d(1, 0)) / a_den(a_21);
+    *xe2 = (xe[1] - (a_12 * a_12) * xp[0]) / a_den(a_12);
+    *ye2 =
+        (ye[1] - (a_12 * a_12) * yp[0] - (a_12 * a_12) * d(0, 1)) / a_den(a_12);
+    *xp2 = *xe1;
+    *yp2 = *ye1;
+    *xp1 = *xe2;
+    *yp1 = *ye2;
   }
 }
 
