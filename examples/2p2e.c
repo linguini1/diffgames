@@ -31,9 +31,9 @@
 #define TIMESTEP (0.01)
 
 const char window_name[] = "2 Pursuers vs 2 Evaders";
-const int width = 2048;
-const int height = 2048;
-const double scale = 6.0;
+const int width = 1024;
+const int height = 1024;
+const double scale = 4.0;
 
 /* State variable indexes */
 
@@ -131,6 +131,7 @@ int main(void) {
   /* Render simulation */
 
   bool running = true;
+  bool show_capture_radius = false;
   SDL_Event event;
 
   while (running) {
@@ -151,6 +152,9 @@ int main(void) {
         case SDLK_ESCAPE:
         case SDLK_q:
           running = false;
+          break;
+        case SDLK_r:
+          show_capture_radius = !show_capture_radius;
           break;
 
         default:
@@ -183,9 +187,11 @@ int main(void) {
 
     /* Draw pursuer capture radius in white */
 
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-    draw_circle(renderer, game_x[P1_X], game_x[P1_Y], CAPTURE_RADIUS);
-    draw_circle(renderer, game_x[P2_X], game_x[P2_Y], CAPTURE_RADIUS);
+    if (show_capture_radius) {
+      SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+      draw_circle(renderer, game_x[P1_X], game_x[P1_Y], CAPTURE_RADIUS);
+      draw_circle(renderer, game_x[P2_X], game_x[P2_Y], CAPTURE_RADIUS);
+    }
 
     /* Show what was drawn */
 
@@ -193,9 +199,11 @@ int main(void) {
 
     /* Clear pursuer capture radius before next slide */
 
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-    draw_circle(renderer, game_x[P1_X], game_x[P1_Y], CAPTURE_RADIUS);
-    draw_circle(renderer, game_x[P2_X], game_x[P2_Y], CAPTURE_RADIUS);
+    if (show_capture_radius) {
+      SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+      draw_circle(renderer, game_x[P1_X], game_x[P1_Y], CAPTURE_RADIUS);
+      draw_circle(renderer, game_x[P2_X], game_x[P2_Y], CAPTURE_RADIUS);
+    }
 
     /* Advance simulation until a capture occurs */
 
@@ -211,6 +219,8 @@ int main(void) {
 
     if (!game_over) {
       dynsys_step(&game, TIMESTEP);
+    } else {
+      show_capture_radius = true;
     }
   }
 
