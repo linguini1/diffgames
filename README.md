@@ -20,6 +20,8 @@ $ make bin/particle
 $ ./bin/particle
 ```
 
+**In all games, you can press 'q' or 'Esc' to quit the simulation.**
+
 ### Particle
 
 A particle which follows your mouse forever.
@@ -29,5 +31,7 @@ A particle which follows your mouse forever.
 ### 2 Pursuers 2 Evaders
 
 An example of a 2 pursuer, 2 evader differential game.
+
+Press 'r' to toggle showing the capture radius of the pursuers.
 
 ![2P2E](./docs/2p2e.png)
