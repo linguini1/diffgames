@@ -7,9 +7,16 @@ WARNINGS += -Wall -Wextra
 ### COMPILER FLAGS ###
 CFLAGS += $(WARNINGS)
 CFLAGS += -I include
-CFLAGS += $(shell sdl2-config --cflags --libs)
-CFLAGS += -lSDL2_ttf
 CFLAGS += -lm
+
+ifeq ($(OS), Windows_NT)
+SDL_PATH = C:\MinGW\SDL2-2.32.10\i686-w64-mingw32
+CFLAGS += -I$(SDL_PATH)/include
+CFLAGS += -L$(SDL_PATH)/lib
+CFLAGS += -lmingw32 -lSDL2main -lSDL2
+else
+CFLAGS += $(shell sdl2-config --cflags --libs)
+endif
 
 ### SOURCE FILES ###
 SRCDIR = src
@@ -27,13 +34,13 @@ all: $(EXAMPLES)
 
 $(EXAMPLES): $(OBJ_FILES)
 	$(MAKE) --silent -C $(EXDIR)/$@
-	$(CC) $(CFLAGS) $(OBJ_FILES) $(EXDIR)/$@/main.c -o $(BINDIR)/$@
+	$(CC) $(OBJ_FILES) $(EXDIR)/$@/main.c $(CFLAGS) -o $(BINDIR)/$@
 
 $(BINDIR)/%: $(EXDIR)/%.c $(OBJ_FILES)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $^ $(CFLAGS) -o $@
 
 %.o: %.c
-	$(CC) $(CFLAGS) -o $@ -c $<
+	$(CC) -c $< $(CFLAGS) -o $@
 
 clean:
 	@$(RM) $(OBJ_FILES)

@@ -1,10 +1,12 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include <SDL2/SDL.h>
 
 #include "dynsys.h"
+#include "utils.h"
 
 #define TIMESTEP (0.01)
 
@@ -12,7 +14,6 @@ static const char window_name[] = "Quadrotor Dynamics";
 static const int width = 2048;
 static const int height = 1024;
 static const double scale = 8.0;
-static const SDL_Rect FULLSCREEN = {.x = 0, .y = 0, .w = width, .h = height};
 
 /* State variable indices */
 
@@ -47,7 +48,10 @@ enum state_e {
 static void quad_f(double *x, size_t n, double dt);
 static void quad_u(double *x, size_t n, double dt);
 
-int main(void) {
+int main(int argc, char **argv) {
+  unused(argc);
+  unused(argv);
+  SDL_Rect fullscreen = {.x = 0, .y = 0, .w = width, .h = height};
 
   /* Set up OpenGL parameters */
 
@@ -134,7 +138,7 @@ int main(void) {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 10);
-    SDL_RenderFillRect(renderer, &FULLSCREEN);
+    SDL_RenderFillRect(renderer, &fullscreen);
 
     /* Set to foreground colour (white) */
 
