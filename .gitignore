@@ -1,6 +1,7 @@
 # Build artifacts
 *.o
 bin/
+SDL2.dll
 
 # Build tooling
 .cache/

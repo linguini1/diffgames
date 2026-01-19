@@ -1,11 +1,12 @@
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include <SDL2/SDL.h>
 
-#include "SDL_render.h"
 #include "dynsys.h"
+#include "utils.h"
 
 #define TIMESTEP (0.01)
 
@@ -34,7 +35,7 @@ const double scale = 4.0;
 /* Game dynamics */
 
 static void game_f(double *x, size_t n, double dt) {
-  (void)n;
+  unused(n);
   /* Isaacs p. 28 */
   x[P_X] += dt * PURSUER_VEL * sin(x[P_HEAD]);
   x[P_Y] += dt * PURSUER_VEL * cos(x[P_HEAD]);
@@ -43,7 +44,7 @@ static void game_f(double *x, size_t n, double dt) {
 }
 
 static void game_u(double *x, size_t n, double dt) {
-  (void)n;
+  unused(n);
   double phi = -1; /* TODO: calc */
   x[P_HEAD] += dt * (PURSUER_VEL / PURSUER_R) * phi;
   x[E_HEAD] = M_PI_4; /* TODO */
@@ -51,8 +52,8 @@ static void game_u(double *x, size_t n, double dt) {
 
 /* Running cost of the game is time to capture */
 static double game_g(const double *x, size_t n, double dt) {
-  (void)n;
-  (void)x;
+  unused(n);
+  unused(x);
   return dt;
 }
 
@@ -61,7 +62,9 @@ static double distance(const double *x) {
   return sqrt(pow((x[P_X] - x[E_X]), 2) + pow((x[P_Y] - x[E_Y]), 2));
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+  unused(argc);
+  unused(argv);
 
   /* Set up OpenGL parameters */
 

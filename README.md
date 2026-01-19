@@ -5,8 +5,29 @@ SDL2.
 
 ## Building
 
+### Linux
+
 To build the entire project, just run `make` in the project directory. This will
 compile the entire library and all the example binaries.
+
+## Windows
+
+You will need to install an SDL2 installation on your machine somewhere, and you
+should be using the MinGW toolchain.
+
+In order to build the examples, you should use the following command:
+```console
+$ make SDL_PATH=path/to/your/SDL2
+```
+
+In order to run any of the examples, ensure the `SDL2.dll` file that came in
+your SDL2 installation's `bin/` directory is present in the directory where you
+are running the example. Ex:
+
+```console
+$ cp path/to/your/SDL2/bin/SDL2.dll .
+$ ./bin/particle.exe
+```
 
 ## Examples
 
