@@ -12,9 +12,10 @@
 "dom initial conditions (start locations and\n    headings).\n\n    The game " \
 "ends when an evader is captured.\n\nUSAGE:\n    2p2e [OPTIONS]\n\nOPTIONS:\n" \
 "    -h          Display this help text.\n    -x <width>  Window width in pix" \
-"els. Default 1024.\n    -y <height> Window height in pixels. Default 1024.\n" \
-"    -s <scale>  Rendering scale. Default 5.\n    -r <radius> Capture radius " \
-"of the pursuers in meters. Default 0.\n\nCONTROLS:\n    This game is visuali" \
-"zed using SDL2 and accepts keyboard input.\n\n    q           Quit the game." \
-"\n    Esc         Quit the game.\n    r           Toggle visualization of th" \
-"e pursuer capture radius.\n    Space       Re-seed and re-start the game.\n"
+"els. Default is half screen width.\n    -y <height> Window height in pixels." \
+" Default is half screen height.\n    -s <scale>  Rendering scale. Default 5." \
+"\n    -r <radius> Capture radius of the pursuers in meters. Default 0.\n\nCO" \
+"NTROLS:\n    This game is visualized using SDL2 and accepts keyboard input." \
+"\n    q           Quit the game.\n    Esc         Quit the game.\n    r     " \
+"      Toggle visualization of the pursuer capture radius.\n    Space       R" \
+"e-seed and re-start the game.\n"

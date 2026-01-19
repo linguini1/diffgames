@@ -11,8 +11,8 @@ CFLAGS += -lm
 
 ifeq ($(OS), Windows_NT)
 SDL_PATH = C:\MinGW\SDL2-2.32.10\i686-w64-mingw32
-CFLAGS += -I$(SDL_PATH)/include
-CFLAGS += -L$(SDL_PATH)/lib
+CFLAGS += -I $(SDL_PATH)/include
+CFLAGS += -L $(SDL_PATH)/lib
 CFLAGS += -lmingw32 -lSDL2main -lSDL2
 else
 CFLAGS += $(shell sdl2-config --cflags --libs)

@@ -9,8 +9,8 @@ USAGE:
 
 OPTIONS:
     -h          Display this help text.
-    -x <width>  Window width in pixels. Default 1024.
-    -y <height> Window height in pixels. Default 1024.
+    -x <width>  Window width in pixels. Default is half screen width.
+    -y <height> Window height in pixels. Default is half screen height.
     -s <scale>  Rendering scale. Default 5.
     -v <vel>    The particle's (positive) velocity in m/s. Default 50.0.
 

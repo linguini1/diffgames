@@ -1,8 +1,8 @@
 #include <getopt.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 
 #include <SDL2/SDL.h>
 
@@ -29,10 +29,9 @@ static void particle_f(double *x, size_t n, double dt);
 static void particle_u(double *x, size_t n, double dt);
 
 int main(int argc, char **argv) {
-  int width = 1024;
-  int height = 1024;
-  SDL_Rect FULLSCREEN = {.x = 0, .y = 0, .w = width, .h = height};
   SDL_Event event;
+  SDL_DisplayMode dm = {0};
+  SDL_DisplayMode tempdm;
   bool running = true;
 
   int c;
@@ -43,10 +42,10 @@ int main(int argc, char **argv) {
       exit(EXIT_SUCCESS);
       break;
     case 'x':
-      width = strtoul(optarg, NULL, 10);
+      dm.w = strtoul(optarg, NULL, 10);
       break;
     case 'y':
-      height = strtoul(optarg, NULL, 10);
+      dm.h = strtoul(optarg, NULL, 10);
       break;
     case 's':
       scale = strtod(optarg, NULL);
@@ -76,11 +75,17 @@ int main(int argc, char **argv) {
     printf("Could not initialize SDL: %s\n", SDL_GetError());
   }
 
+  SDL_GetDesktopDisplayMode(0, &tempdm);
+  if (dm.w == 0) dm.w = tempdm.w / 2;
+  if (dm.h == 0) dm.h = tempdm.h / 2;
+
+  SDL_Rect fullscreen = {.x = 0, .y = 0, .w = dm.w, .h = dm.h};
+
   /* Create window */
 
-  SDL_Window *window = SDL_CreateWindow(window_name, SDL_WINDOWPOS_UNDEFINED,
-                                        SDL_WINDOWPOS_UNDEFINED, width, height,
-                                        SDL_WINDOW_OPENGL);
+  SDL_Window *window =
+      SDL_CreateWindow(window_name, SDL_WINDOWPOS_UNDEFINED,
+                       SDL_WINDOWPOS_UNDEFINED, dm.w, dm.h, SDL_WINDOW_OPENGL);
 
   /* Create renderer */
 
@@ -91,9 +96,9 @@ int main(int argc, char **argv) {
   /* Set up particle with random initial conditons */
 
   double x[] = {
-      [P_X] = randval(0, width / scale),  /* X pos */
-      [P_Y] = randval(0, height / scale), /* Y pos */
-      [P_H] = 0,                          /* Heading */
+      [P_X] = randval(0, dm.w / scale), /* X pos */
+      [P_Y] = randval(0, dm.h / scale), /* Y pos */
+      [P_H] = 0,                        /* Heading */
   };
   dynsys_t particle = DYNSYS_SINIT(x, particle_f, particle_u, NULL, NULL);
 
@@ -131,7 +136,7 @@ int main(int argc, char **argv) {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 10);
-    SDL_RenderFillRect(renderer, &FULLSCREEN);
+    SDL_RenderFillRect(renderer, &fullscreen);
 
     /* Set to foreground colour (white) */
 

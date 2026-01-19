@@ -18,11 +18,11 @@
  */
 
 #include <getopt.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <math.h>
 
 #include <SDL2/SDL.h>
 
@@ -83,10 +83,9 @@ static void draw_circle(SDL_Renderer *renderer, int cx, int cy, int radius);
 
 int main(int argc, char **argv) {
 
-  int width = 1024;
-  int height = 1024;
   double scale = 5.0;
-  SDL_Rect FULLSCREEN = {.x = 0, .y = 0, .w = width, .h = height};
+  SDL_DisplayMode dm = {0};
+  SDL_DisplayMode tempdm;
   SDL_Event event;
   bool running = true;
   bool show_capture_radius = false;
@@ -100,10 +99,10 @@ int main(int argc, char **argv) {
       exit(EXIT_SUCCESS);
       break;
     case 'x':
-      width = strtoul(optarg, NULL, 10);
+      dm.w = strtoul(optarg, NULL, 10);
       break;
     case 'y':
-      height = strtoul(optarg, NULL, 10);
+      dm.h = strtoul(optarg, NULL, 10);
       break;
     case 'r':
       capture_radius = strtod(optarg, NULL);
@@ -130,11 +129,16 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Could not initialize SDL: %s\n", SDL_GetError());
   }
 
+  SDL_GetDesktopDisplayMode(0, &tempdm);
+  if (dm.w == 0) dm.w = tempdm.w / 2;
+  if (dm.h == 0) dm.h = tempdm.h / 2;
+  SDL_Rect fullscreen = {.x = 0, .y = 0, .w = dm.w, .h = dm.h};
+
   /* Create window */
 
-  SDL_Window *window = SDL_CreateWindow(WINDOW_NAME, SDL_WINDOWPOS_UNDEFINED,
-                                        SDL_WINDOWPOS_UNDEFINED, width, height,
-                                        SDL_WINDOW_OPENGL);
+  SDL_Window *window =
+      SDL_CreateWindow(WINDOW_NAME, SDL_WINDOWPOS_UNDEFINED,
+                       SDL_WINDOWPOS_UNDEFINED, dm.w, dm.h, SDL_WINDOW_OPENGL);
 
   /* Create renderer */
 
@@ -146,17 +150,17 @@ int main(int argc, char **argv) {
 
   srand(time(NULL));
   double game_x[] = {
-      [P1_X] = randval(0.0, width / scale),
-      [P1_Y] = randval(0.0, height / scale),
+      [P1_X] = randval(0.0, dm.w / scale),
+      [P1_Y] = randval(0.0, dm.h / scale),
       [P1_H] = 0.0,
-      [P2_X] = randval(0.0, width / scale),
-      [P2_Y] = randval(0.0, height / scale),
+      [P2_X] = randval(0.0, dm.w / scale),
+      [P2_Y] = randval(0.0, dm.h / scale),
       [P2_H] = 0.0,
-      [E1_X] = randval(0.0, width / scale),
-      [E1_Y] = randval(0.0, height / scale),
+      [E1_X] = randval(0.0, dm.w / scale),
+      [E1_Y] = randval(0.0, dm.h / scale),
       [E1_H] = 0.0,
-      [E2_X] = randval(0.0, width / scale),
-      [E2_Y] = randval(0.0, height / scale),
+      [E2_X] = randval(0.0, dm.w / scale),
+      [E2_Y] = randval(0.0, dm.h / scale),
       [E2_H] = 0.0,
   };
   dynsys_t game = DYNSYS_SINIT(game_x, game_f, game_u, NULL, NULL);
@@ -186,14 +190,14 @@ int main(int argc, char **argv) {
           show_capture_radius = !show_capture_radius;
           break;
         case SDLK_SPACE:
-          game_x[P1_X] = randval(0.0, width / scale);
-          game_x[P1_Y] = randval(0.0, height / scale);
-          game_x[P2_X] = randval(0.0, width / scale);
-          game_x[P2_Y] = randval(0.0, height / scale);
-          game_x[E1_X] = randval(0.0, width / scale);
-          game_x[E1_Y] = randval(0.0, height / scale);
-          game_x[E2_X] = randval(0.0, width / scale);
-          game_x[E2_Y] = randval(0.0, height / scale);
+          game_x[P1_X] = randval(0.0, dm.w / scale);
+          game_x[P1_Y] = randval(0.0, dm.h / scale);
+          game_x[P2_X] = randval(0.0, dm.w / scale);
+          game_x[P2_Y] = randval(0.0, dm.h / scale);
+          game_x[E1_X] = randval(0.0, dm.w / scale);
+          game_x[E1_Y] = randval(0.0, dm.h / scale);
+          game_x[E2_X] = randval(0.0, dm.w / scale);
+          game_x[E2_Y] = randval(0.0, dm.h / scale);
           dynsys_init(&game, game_x, sizeof(game_x) / sizeof(double), game_f,
                       game_u, NULL, NULL);
           SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
@@ -215,7 +219,7 @@ int main(int argc, char **argv) {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 10);
-    SDL_RenderFillRect(renderer, &FULLSCREEN);
+    SDL_RenderFillRect(renderer, &fullscreen);
 
     /* Draw pursuers in red */
 
