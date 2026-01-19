@@ -1,3 +1,4 @@
+#include <getopt.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,51 +6,62 @@
 #include <SDL2/SDL.h>
 
 #include "dynsys.h"
+#include "helptext.h"
+#include "utils.h"
 
 #define TIMESTEP (0.01)
 
-static const char window_name[] = "Mouse-following Particle";
-static const int width = 2048;
-static const int height = 1024;
-static const double scale = 4.0;
-static const SDL_Rect FULLSCREEN = {.x = 0, .y = 0, .w = width, .h = height};
+static const char window_name[] = "Particle";
 
 static int mouse_x;
 static int mouse_y;
+static double scale = 5.0;
+static double p_vel = 50.0;
 
-/* Represents a mass-less particle */
-
-struct particle_state {
-  double x;       /* Cartesian x position */
-  double y;       /* Cartesian y position */
-  double vel;     /* Velocity in units/s */
-  double heading; /* Heading in radians */
+enum state_e {
+  P_X, /* Cartesian x position */
+  P_Y, /* Cartesian y position */
+  P_H, /* Velocity in units/s */
 };
 
-/* Particle dynamics. */
+static void particle_f(double *x, size_t n, double dt);
+static void particle_u(double *x, size_t n, double dt);
 
-static void particle_f(double *x, size_t n, double dt) {
-  (void)n;
-  struct particle_state *p = (struct particle_state *)x;
-  p->x += p->vel * dt * cos(p->heading);
-  p->y += p->vel * dt * sin(p->heading);
-}
+int main(int argc, char **argv) {
+  int width = 1024;
+  int height = 1024;
+  SDL_Rect FULLSCREEN = {.x = 0, .y = 0, .w = width, .h = height};
+  SDL_Event event;
+  bool running = true;
 
-/* Particle control function. Particle will always try to follow the cursor. */
-
-static void particle_u(double *x, size_t n, double dt) {
-  (void)n;
-  (void)dt;
-  struct particle_state *p = (struct particle_state *)x;
-
-  /* Compute a heading which moves towards the mouse position */
-
-  double dx = ((double)mouse_x / scale) - p->x;
-  double dy = ((double)mouse_y / scale) - p->y;
-  p->heading = atan2(dy, dx);
-}
-
-int main(void) {
+  int c;
+  while ((c = getopt(argc, argv, ":hx:y:s:v:")) != -1) {
+    switch (c) {
+    case 'h':
+      puts(HELP_TEXT);
+      exit(EXIT_SUCCESS);
+      break;
+    case 'x':
+      width = strtoul(optarg, NULL, 10);
+      break;
+    case 'y':
+      height = strtoul(optarg, NULL, 10);
+      break;
+    case 's':
+      scale = strtod(optarg, NULL);
+      break;
+    case 'v':
+      p_vel = strtod(optarg, NULL);
+      if (p_vel <= 0.0) {
+        fprintf(stderr, "Invalid velocity.\n");
+      }
+      break;
+    case '?':
+      fprintf(stderr, "Unknown option -%c\n", optopt);
+      exit(EXIT_FAILURE);
+      break;
+    }
+  }
 
   /* Set up OpenGL parameters */
 
@@ -75,20 +87,14 @@ int main(void) {
       window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
   SDL_RenderSetScale(renderer, scale, scale);
 
-  /* Set up particle with initial conditons */
+  /* Set up particle with random initial conditons */
 
-  double x[4] = {
-      (width / (2 * scale)),  /* X pos */
-      (height / (2 * scale)), /* Y pos */
-      50.0,                   /* Velocity */
-      0,                      /* Heading */
+  double x[] = {
+      [P_X] = randval(0, width / scale),  /* X pos */
+      [P_Y] = randval(0, height / scale), /* Y pos */
+      [P_H] = 0,                          /* Heading */
   };
   dynsys_t particle = DYNSYS_SINIT(x, particle_f, particle_u, NULL, NULL);
-
-  /* Render simulation */
-
-  bool running = true;
-  SDL_Event event;
 
   while (running) {
 
@@ -132,7 +138,7 @@ int main(void) {
 
     /* Draw agents */
 
-    SDL_RenderDrawPoint(renderer, x[0], x[1]);
+    SDL_RenderDrawPoint(renderer, x[P_X], x[P_Y]);
 
     /* Show what was drawn */
 
@@ -151,4 +157,24 @@ int main(void) {
   SDL_Quit();
 
   return EXIT_SUCCESS;
+}
+
+/* Particle dynamics. */
+
+static void particle_f(double *x, size_t n, double dt) {
+  unused(n);
+  x[P_X] += p_vel * dt * cos(x[P_H]);
+  x[P_Y] += p_vel * dt * sin(x[P_H]);
+}
+
+/* Particle control function. Particle will always try to follow the cursor. */
+
+static void particle_u(double *x, size_t n, double dt) {
+  unused(n);
+  unused(dt);
+
+  /* Compute a heading which moves towards the mouse position */
+  double dx = ((double)mouse_x / scale) - x[P_X];
+  double dy = ((double)mouse_y / scale) - x[P_Y];
+  x[P_H] = atan2(dy, dx);
 }

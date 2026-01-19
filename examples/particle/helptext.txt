@@ -1,0 +1,21 @@
+Particle
+
+DESCRIPTION:
+    A simple particle game where the pursuer (the particle) tries to capture
+    your mouse.
+
+USAGE:
+    particle [OPTIONS]
+
+OPTIONS:
+    -h          Display this help text.
+    -x <width>  Window width in pixels. Default 1024.
+    -y <height> Window height in pixels. Default 1024.
+    -s <scale>  Rendering scale. Default 5.
+    -v <vel>    The particle's (positive) velocity in m/s. Default 50.0.
+
+CONTROLS:
+    This game is visualized using SDL2 and accepts keyboard input.
+
+    q           Quit the game.
+    Esc         Quit the game.

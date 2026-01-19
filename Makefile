@@ -19,12 +19,15 @@ OBJ_FILES = $(patsubst %.c,%.o,$(SRC_FILES))
 ### BINARIES ###
 BINDIR = bin
 EXDIR = examples
-EXAMPLES = $(patsubst $(EXDIR)/%.c,%,$(wildcard $(EXDIR)/*.c))
-EXAMPLE_BINS = $(patsubst %,$(BINDIR)/%,$(EXAMPLES))
+EXAMPLES = $(patsubst $(EXDIR)/%,%,$(wildcard $(EXDIR)/*))
 
-all: $(EXAMPLE_BINS)
+.PHONY: $(EXAMPLES)
 
-# TODO: make <test> should build bin/<test>
+all: $(EXAMPLES)
+
+$(EXAMPLES): $(OBJ_FILES)
+	$(MAKE) --silent -C $(EXDIR)/$@
+	$(CC) $(CFLAGS) $(OBJ_FILES) $(EXDIR)/$@/main.c -o $(BINDIR)/$@
 
 $(BINDIR)/%: $(EXDIR)/%.c $(OBJ_FILES)
 	$(CC) $(CFLAGS) $^ -o $@

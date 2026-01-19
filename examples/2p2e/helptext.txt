@@ -1,0 +1,37 @@
+2 Pursuers, 2 Evaders
+
+DESCRIPTION:
+    This game is based on the paper "Multiple Pursuers Multiple Evader
+    Differential Games" by Eloy Garcia, David W. Casbeer, Alexander Von Moll and
+    Meir Pachter.
+
+    The game consists of two pursuers and two evaders. The goal of the pursuers
+    is to capture the evaders (come within some capture radius distance of the
+    evaders) in the shortest time possible. The evaders aim to avoid capture for
+    as long as possible.
+
+    The two pursuers are always faster than both of the evaders. All agents have
+    holonomic motion in an infinite 2D plane. The players are controlled by
+    their optimal control signals from Section III of the paper. At run-time,
+    the players are all assigned random initial conditions (start locations and
+    headings).
+
+    The game ends when an evader is captured.
+
+USAGE:
+    2p2e [OPTIONS]
+
+OPTIONS:
+    -h          Display this help text.
+    -x <width>  Window width in pixels. Default 1024.
+    -y <height> Window height in pixels. Default 1024.
+    -s <scale>  Rendering scale. Default 5.
+    -r <radius> Capture radius of the pursuers in meters. Default 0.
+
+CONTROLS:
+    This game is visualized using SDL2 and accepts keyboard input.
+
+    q           Quit the game.
+    Esc         Quit the game.
+    r           Toggle visualization of the pursuer capture radius.
+    Space       Re-seed and re-start the game.
