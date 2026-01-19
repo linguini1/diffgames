@@ -1,0 +1,24 @@
+Homicidal Chauffeur
+
+DESCRIPTION:
+    TODO
+
+USAGE:
+    homicidal_chauffeur [OPTIONS]
+
+OPTIONS:
+    -h          Display this help text.
+    -x <width>  Window width in pixels. Default is half screen width.
+    -y <height> Window height in pixels. Default is half screen height.
+    -s <scale>  Rendering scale. Default 5.
+    -v <vel>    The chauffeur's (positive) velocity in m/s. Default 50.0.
+    -e <vel>    The pedestrian's (positive) velocity in m/s. Default 25.0.
+    -r <radius> The chauffeur's capture radius in m. Default 0.
+    -t <radius> The chauffeur's turning radius in m. Default 5.0.
+
+CONTROLS:
+    This game is visualized using SDL2 and accepts keyboard input.
+
+    q           Quit the game.
+    Esc         Quit the game.
+    Space       Re-seed and restart the game.

@@ -1,3 +1,4 @@
+#include <getopt.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -6,65 +7,107 @@
 #include <SDL2/SDL.h>
 
 #include "dynsys.h"
+#include "helptext.h"
 #include "utils.h"
+
+const char window_name[] = "Homicidal Chauffer";
 
 #define TIMESTEP (0.01)
 
 /* State variable indexes */
 
-#define P_X (0)
-#define P_Y (1)
-#define P_HEAD (2)
-#define E_X (3)
-#define E_Y (4)
-#define E_HEAD (6)
+enum state_e {
+  P_X,    /* Evader X */
+  P_Y,    /* Evader Y */
+  P_HEAD, /* Evader heading */
+  E_X,    /* Evader X */
+  E_Y,    /* Evader Y */
+  E_HEAD, /* Evader heading */
+};
 
 /* Game constants */
 
-#define GAME_SPEED (20.0)
-#define PURSUER_VEL (1.0 * GAME_SPEED)
-#define EVADER_VEL (0.5 * GAME_SPEED)
-#define PURSUER_R (1.0) /* Turning radius */
-#define CAPTURE_RADIUS (2.5)
-
-const char window_name[] = "Homicidal Chauffer";
-const int width = 2048;
-const int height = 1024;
-const double scale = 4.0;
+static double chauffeur_vel = 50.0;
+static double pedestrian_vel = 25.0;
+static double capture_radius = 0.0;
+static double turn_radius = 5.0;
 
 /* Game dynamics */
 
-static void game_f(double *x, size_t n, double dt) {
-  unused(n);
-  /* Isaacs p. 28 */
-  x[P_X] += dt * PURSUER_VEL * sin(x[P_HEAD]);
-  x[P_Y] += dt * PURSUER_VEL * cos(x[P_HEAD]);
-  x[E_X] += dt * EVADER_VEL * sin(x[E_HEAD]);
-  x[E_Y] += dt * EVADER_VEL * cos(x[E_HEAD]);
-}
-
-static void game_u(double *x, size_t n, double dt) {
-  unused(n);
-  double phi = -1; /* TODO: calc */
-  x[P_HEAD] += dt * (PURSUER_VEL / PURSUER_R) * phi;
-  x[E_HEAD] = M_PI_4; /* TODO */
-}
-
-/* Running cost of the game is time to capture */
-static double game_g(const double *x, size_t n, double dt) {
-  unused(n);
-  unused(x);
-  return dt;
-}
+static void game_f(double *x, size_t n, double dt);
+static void game_u(double *x, size_t n, double dt);
+static double game_g(const double *x, size_t n, double dt);
 
 /* Distance between the pursuer and evader */
+
 static double distance(const double *x) {
-  return sqrt(pow((x[P_X] - x[E_X]), 2) + pow((x[P_Y] - x[E_Y]), 2));
+  return sqrt(pow((0.0 - x[E_X]), 2) + pow((0.0 - x[E_Y]), 2));
 }
 
 int main(int argc, char **argv) {
-  unused(argc);
-  unused(argv);
+  double scale = 5.0;
+  SDL_DisplayMode dm = {0};
+  SDL_DisplayMode tempdm;
+  SDL_Event event;
+  bool running = true;
+  bool game_over = false;
+
+  int c;
+  while ((c = getopt(argc, argv, ":hx:y:s:v:r:t:e:")) != -1) {
+    switch (c) {
+    case 'h':
+      puts(HELP_TEXT);
+      exit(EXIT_SUCCESS);
+      break;
+    case 'x':
+      dm.w = strtoul(optarg, NULL, 10);
+      break;
+    case 'y':
+      dm.h = strtoul(optarg, NULL, 10);
+      break;
+    case 's':
+      scale = strtod(optarg, NULL);
+      break;
+    case 'v':
+      chauffeur_vel = strtod(optarg, NULL);
+      if (chauffeur_vel < 0) {
+        fprintf(stderr, "Chauffeur velocity must be >= 0.\n");
+        exit(EXIT_FAILURE);
+      }
+      break;
+    case 'e':
+      pedestrian_vel = strtod(optarg, NULL);
+      if (pedestrian_vel < 0) {
+        fprintf(stderr, "Pedestrian velocity must be >= 0.\n");
+        exit(EXIT_FAILURE);
+      }
+      break;
+    case 'r':
+      capture_radius = strtod(optarg, NULL);
+      if (capture_radius < 0) {
+        fprintf(stderr, "Capture radius must be >= 0.\n");
+        exit(EXIT_FAILURE);
+      }
+      break;
+    case 't':
+      turn_radius = strtod(optarg, NULL);
+      if (turn_radius < 0) {
+        fprintf(stderr, "Turning radius must be >= 0.\n");
+        exit(EXIT_FAILURE);
+      }
+      break;
+    case '?':
+      fprintf(stderr, "Unknown option -%c\n", optopt);
+      exit(EXIT_FAILURE);
+      break;
+    }
+  }
+
+  if (pedestrian_vel >= chauffeur_vel) {
+    fprintf(stderr,
+            "Pedestrian velocity must be less than the chauffeur velocity.\n");
+    exit(EXIT_FAILURE);
+  }
 
   /* Set up OpenGL parameters */
 
@@ -78,11 +121,16 @@ int main(int argc, char **argv) {
     printf("Could not initialize SDL: %s\n", SDL_GetError());
   }
 
+  SDL_GetDesktopDisplayMode(0, &tempdm);
+  if (dm.w == 0) dm.w = tempdm.w / 2;
+  if (dm.h == 0) dm.h = tempdm.h / 2;
+  SDL_Rect fullscreen = {.x = 0, .y = 0, .w = dm.w, .h = dm.h};
+
   /* Create window */
 
-  SDL_Window *window = SDL_CreateWindow(window_name, SDL_WINDOWPOS_UNDEFINED,
-                                        SDL_WINDOWPOS_UNDEFINED, width, height,
-                                        SDL_WINDOW_OPENGL);
+  SDL_Window *window =
+      SDL_CreateWindow(window_name, SDL_WINDOWPOS_UNDEFINED,
+                       SDL_WINDOWPOS_UNDEFINED, dm.w, dm.h, SDL_WINDOW_OPENGL);
 
   /* Create renderer */
 
@@ -93,20 +141,15 @@ int main(int argc, char **argv) {
   /* Set up game with initial conditons */
 
   double game_x[] = {
-      [P_X] = (width / (2 * scale)),  /* Pursuer x */
-      [P_Y] = (height / (2 * scale)), /* Pursuer y */
-      [P_HEAD] = 0,                   /* Pursuer heading */
-      [E_X] = 0,                      /* Evader x */
-      [E_Y] = 0,                      /* Evader y */
-      [E_HEAD] = 0,                   /* Evader heading */
+      [P_X] = randval(0, dm.w / scale), [P_Y] = randval(0, dm.h / scale),
+      [P_HEAD] = randval(0, 2 * M_PI),  [E_X] = randval(0, dm.w / scale),
+      [E_Y] = randval(0, dm.h / scale), [E_HEAD] = 0,
   };
   dynsys_t game = DYNSYS_SINIT(game_x, game_f, game_u, game_g, NULL);
 
   /* Render simulation */
 
-  bool running = true;
-  SDL_Event event;
-
+  running = true;
   while (running) {
 
     /* Check for input events */
@@ -126,6 +169,18 @@ int main(int argc, char **argv) {
         case SDLK_q:
           running = false;
           break;
+        case SDLK_SPACE:
+          game_x[P_X] = randval(0, dm.w / scale);
+          game_x[P_Y] = randval(0, dm.h / scale),
+          game_x[P_HEAD] = randval(0, 2 * M_PI);
+          game_x[E_X] = randval(0, dm.w / scale),
+          game_x[E_Y] = randval(0, dm.h / scale);
+          dynsys_init(&game, game_x, sizeof(game_x) / sizeof(double), game_f,
+                      game_u, game_g, NULL);
+          SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+          SDL_RenderClear(renderer);
+          SDL_RenderPresent(renderer);
+          break;
 
         default:
           break;
@@ -139,20 +194,19 @@ int main(int argc, char **argv) {
 
     /* Clear screen to black with some transparency so we can see the movement
      * trails of the players.
-     * TODO: figure out alpha
      */
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 10);
+    SDL_RenderFillRect(renderer, &fullscreen);
 
     /* Draw agents. Pursuer is red, evader is green. */
 
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-    SDL_RenderDrawPoint(renderer, game_x[P_X], game_x[P_Y]); /* P */
+    SDL_RenderDrawPoint(renderer, game_x[P_X], game_x[P_Y]);
 
     SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-    SDL_RenderDrawPoint(renderer, game_x[E_X], game_x[E_Y]); /* E */
+    SDL_RenderDrawPoint(renderer, game_x[E_X], game_x[E_Y]);
 
     /* Show what was drawn */
 
@@ -164,7 +218,9 @@ int main(int argc, char **argv) {
      */
 
     double curdist = distance(game_x);
-    if (!(curdist <= CAPTURE_RADIUS)) {
+    game_over = curdist <= capture_radius;
+
+    if (!game_over) {
       dynsys_step(&game, TIMESTEP);
     }
   }
@@ -176,4 +232,41 @@ int main(int argc, char **argv) {
   SDL_Quit();
 
   return EXIT_SUCCESS;
+}
+
+static void game_f(double *x, size_t n, double dt) {
+  unused(n);
+  x[P_X] += dt * chauffeur_vel * sin(x[P_HEAD]);
+  x[P_Y] += dt * chauffeur_vel * cos(x[P_HEAD]);
+  x[E_X] += dt * pedestrian_vel * sin(x[E_HEAD]);
+  x[E_Y] += dt * pedestrian_vel * cos(x[E_HEAD]);
+}
+
+static void game_u(double *x, size_t n, double dt) {
+  unused(n);
+  static double t = 0;
+  double phi;
+  double rho = 0;
+  double sw = cos(rho + t) - cos(rho);
+
+  /* TODO: optimal chauffeur strategy */
+  if (f_is_zero(sw, 0.05)) {
+    phi = 0;
+  } else if (sw < 0.0) {
+    phi = -1;
+  } else {
+    phi = 1;
+  }
+
+  /* TODO: optimal evader strategy */
+  x[E_HEAD] = rho + t;
+  x[P_HEAD] += dt * (chauffeur_vel / turn_radius) * phi;
+  t += dt;
+}
+
+/* Running cost of the game is time to capture */
+static double game_g(const double *x, size_t n, double dt) {
+  unused(n);
+  unused(x);
+  return dt;
 }
