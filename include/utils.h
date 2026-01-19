@@ -14,7 +14,7 @@
 /* Checking equality on floating point values */
 
 #define f_is_equal(exp, act, tol)                                              \
-  ((exp) - (tol) <= (act) && (act) >= ((exp) + (tol)))
+  ((exp) - (tol) <= (act) && (act) <= ((exp) + (tol)))
 #define f_is_zero(val, tol) f_is_equal(0.0, val, tol)
 
 #endif // DIFFGAMES_UTILS_H

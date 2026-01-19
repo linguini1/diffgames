@@ -11,16 +11,22 @@ compile the entire library and all the example binaries.
 ## Examples
 
 Included examples can be found in the `examples/` directory. To make a specific
-example, you can use `make bin/<example>` where `<example>` is the name of the C
-file without the `.c` suffix.
+example, you can use `make <example>` where `<example>` is the name of the
+example's directory.
 
 Ex: to build and run the `particle` example, you can use:
 ```console
-$ make bin/particle
+$ make particle
 $ ./bin/particle
 ```
 
-**In all games, you can press 'q' or 'Esc' to quit the simulation.**
+**In all games, you can press 'q' or 'Esc' to quit the simulation.** For
+specific information about the example you're using, run the example with the
+`-h` flag:
+
+```console
+./bin/particle -h
+```
 
 ### Particle
 

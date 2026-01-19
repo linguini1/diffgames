@@ -17,6 +17,7 @@
  * doi={10.1109/TAC.2020.3003840}}
  */
 
+#include <getopt.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,16 +25,13 @@
 
 #include <SDL2/SDL.h>
 
-#include "SDL_render.h"
 #include "dynsys.h"
+#include "helptext.h"
 #include "utils.h"
 
-#define TIMESTEP (0.01)
+#define TIMESTEP (0.01) /* Fraction of a second */
 
-const char window_name[] = "2 Pursuers vs 2 Evaders";
-const int width = 1024;
-const int height = 1024;
-const double scale = 4.0;
+const char WINDOW_NAME[] = "2 Pursuers, 2 Evaders";
 
 /* State variable indexes */
 
@@ -52,6 +50,11 @@ enum var_e {
   E2_H, /* Evader 2 heading */
 };
 
+/* Game "constant" parameters */
+
+#define CAPTURE_TOLERANCE (0.08)
+static double capture_radius = 0.0;
+
 /* Player velocities */
 
 #define P1_VEL (45.0)
@@ -64,8 +67,6 @@ static const double RATIOS[2][2] = {
     {E1_VEL / P2_VEL, E2_VEL / P2_VEL},
 };
 
-#define CAPTURE_RADIUS (10.0)
-
 /* Game dynamics */
 
 static void game_f(double *x, size_t n, double dt);
@@ -77,13 +78,44 @@ static double dist(double x1, double y1, double x2, double y2) {
 
 /* Drawing utilities */
 
-#define CIRCLE_POINTS (10)
-
-const SDL_Rect FULLSCREEN = {.x = 0, .y = 0, .w = width, .h = height};
-
 static void draw_circle(SDL_Renderer *renderer, int cx, int cy, int radius);
 
-int main(void) {
+int main(int argc, char **argv) {
+
+  int width = 1024;
+  int height = 1024;
+  double scale = 5.0;
+  SDL_Rect FULLSCREEN = {.x = 0, .y = 0, .w = width, .h = height};
+  SDL_Event event;
+  bool running = true;
+  bool show_capture_radius = false;
+  bool game_over = false;
+
+  int c;
+  while ((c = getopt(argc, argv, ":hx:y:s:r:")) != -1) {
+    switch (c) {
+    case 'h':
+      puts(HELP_TEXT);
+      exit(EXIT_SUCCESS);
+      break;
+    case 'x':
+      width = strtoul(optarg, NULL, 10);
+      break;
+    case 'y':
+      height = strtoul(optarg, NULL, 10);
+      break;
+    case 'r':
+      capture_radius = strtod(optarg, NULL);
+      break;
+    case 's':
+      scale = strtod(optarg, NULL);
+      break;
+    case '?':
+      fprintf(stderr, "Unknown option -%c\n", optopt);
+      exit(EXIT_FAILURE);
+      break;
+    }
+  }
 
   /* Set up OpenGL parameters */
 
@@ -99,7 +131,7 @@ int main(void) {
 
   /* Create window */
 
-  SDL_Window *window = SDL_CreateWindow(window_name, SDL_WINDOWPOS_UNDEFINED,
+  SDL_Window *window = SDL_CreateWindow(WINDOW_NAME, SDL_WINDOWPOS_UNDEFINED,
                                         SDL_WINDOWPOS_UNDEFINED, width, height,
                                         SDL_WINDOW_OPENGL);
 
@@ -128,11 +160,7 @@ int main(void) {
   };
   dynsys_t game = DYNSYS_SINIT(game_x, game_f, game_u, NULL, NULL);
 
-  /* Render simulation */
-
-  bool running = true;
-  bool show_capture_radius = false;
-  SDL_Event event;
+  /* Simulation loop */
 
   while (running) {
 
@@ -155,6 +183,21 @@ int main(void) {
           break;
         case SDLK_r:
           show_capture_radius = !show_capture_radius;
+          break;
+        case SDLK_SPACE:
+          game_x[P1_X] = randval(0.0, width / scale);
+          game_x[P1_Y] = randval(0.0, height / scale);
+          game_x[P2_X] = randval(0.0, width / scale);
+          game_x[P2_Y] = randval(0.0, height / scale);
+          game_x[E1_X] = randval(0.0, width / scale);
+          game_x[E1_Y] = randval(0.0, height / scale);
+          game_x[E2_X] = randval(0.0, width / scale);
+          game_x[E2_Y] = randval(0.0, height / scale);
+          dynsys_init(&game, game_x, sizeof(game_x) / sizeof(double), game_f,
+                      game_u, NULL, NULL);
+          SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+          SDL_RenderClear(renderer);
+          SDL_RenderPresent(renderer);
           break;
 
         default:
@@ -187,10 +230,11 @@ int main(void) {
 
     /* Draw pursuer capture radius in white */
 
-    if (show_capture_radius) {
+    if ((show_capture_radius || game_over) &&
+        !f_is_zero(capture_radius, 0.01)) {
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-      draw_circle(renderer, game_x[P1_X], game_x[P1_Y], CAPTURE_RADIUS);
-      draw_circle(renderer, game_x[P2_X], game_x[P2_Y], CAPTURE_RADIUS);
+      draw_circle(renderer, game_x[P1_X], game_x[P1_Y], capture_radius);
+      draw_circle(renderer, game_x[P2_X], game_x[P2_Y], capture_radius);
     }
 
     /* Show what was drawn */
@@ -199,28 +243,27 @@ int main(void) {
 
     /* Clear pursuer capture radius before next slide */
 
-    if (show_capture_radius) {
+    if ((show_capture_radius || game_over) &&
+        !f_is_zero(capture_radius, 0.01)) {
       SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-      draw_circle(renderer, game_x[P1_X], game_x[P1_Y], CAPTURE_RADIUS);
-      draw_circle(renderer, game_x[P2_X], game_x[P2_Y], CAPTURE_RADIUS);
+      draw_circle(renderer, game_x[P1_X], game_x[P1_Y], capture_radius);
+      draw_circle(renderer, game_x[P2_X], game_x[P2_Y], capture_radius);
     }
 
     /* Advance simulation until a capture occurs */
 
-    bool game_over =
-        ((dist(game_x[E1_X], game_x[E1_Y], game_x[P1_X], game_x[P1_Y]) <=
-          CAPTURE_RADIUS) ||
-         (dist(game_x[E1_X], game_x[E1_Y], game_x[P2_X], game_x[P2_Y]) <=
-          CAPTURE_RADIUS) ||
-         (dist(game_x[E2_X], game_x[E2_Y], game_x[P1_X], game_x[P1_Y]) <=
-          CAPTURE_RADIUS) ||
-         (dist(game_x[E2_X], game_x[E2_Y], game_x[P2_X], game_x[P2_Y]) <=
-          CAPTURE_RADIUS));
+    game_over =
+        f_is_equal(dist(game_x[E1_X], game_x[E1_Y], game_x[P1_X], game_x[P1_Y]),
+                   capture_radius, CAPTURE_TOLERANCE) ||
+        f_is_equal(dist(game_x[E1_X], game_x[E1_Y], game_x[P2_X], game_x[P2_Y]),
+                   capture_radius, CAPTURE_TOLERANCE) ||
+        f_is_equal(dist(game_x[E2_X], game_x[E2_Y], game_x[P1_X], game_x[P1_Y]),
+                   capture_radius, CAPTURE_TOLERANCE) ||
+        f_is_equal(dist(game_x[E2_X], game_x[E2_Y], game_x[P2_X], game_x[P2_Y]),
+                   capture_radius, CAPTURE_TOLERANCE);
 
     if (!game_over) {
       dynsys_step(&game, TIMESTEP);
-    } else {
-      show_capture_radius = true;
     }
   }
 
@@ -329,6 +372,7 @@ static void game_u(double *x, size_t n, double dt) {
 }
 
 static void draw_circle(SDL_Renderer *renderer, int cx, int cy, int radius) {
+#define CIRCLE_POINTS (10)
   SDL_Point points[CIRCLE_POINTS];
 
   /* Calculate points */
