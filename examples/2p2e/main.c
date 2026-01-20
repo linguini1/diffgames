@@ -28,6 +28,7 @@
 
 #include "dynsys.h"
 #include "helptext.h"
+#include "render.h"
 #include "utils.h"
 
 #define TIMESTEP (0.01) /* Fraction of a second */
@@ -68,6 +69,8 @@ static const double RATIOS[2][2] = {
     {E1_VEL / P2_VEL, E2_VEL / P2_VEL},
 };
 
+#define CIRCLE_POINTS (15)
+
 /* Game dynamics */
 
 static void game_f(double *x, size_t n, double dt);
@@ -76,10 +79,6 @@ static void game_u(double *x, size_t n, double dt);
 static double dist(double x1, double y1, double x2, double y2) {
   return sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
 }
-
-/* Drawing utilities */
-
-static void draw_circle(SDL_Renderer *renderer, int cx, int cy, int radius);
 
 int main(int argc, char **argv) {
 
@@ -238,8 +237,10 @@ int main(int argc, char **argv) {
     if ((show_capture_radius || game_over) &&
         !f_is_zero(capture_radius, 0.01)) {
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-      draw_circle(renderer, game_x[P1_X], game_x[P1_Y], capture_radius);
-      draw_circle(renderer, game_x[P2_X], game_x[P2_Y], capture_radius);
+      render_circle(renderer, vec2d_temp(game_x[P1_X], game_x[P1_Y]),
+                    capture_radius, CIRCLE_POINTS);
+      render_circle(renderer, vec2d_temp(game_x[P2_X], game_x[P2_Y]),
+                    capture_radius, CIRCLE_POINTS);
     }
 
     /* Show what was drawn */
@@ -251,8 +252,10 @@ int main(int argc, char **argv) {
     if ((show_capture_radius || game_over) &&
         !f_is_zero(capture_radius, 0.01)) {
       SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-      draw_circle(renderer, game_x[P1_X], game_x[P1_Y], capture_radius);
-      draw_circle(renderer, game_x[P2_X], game_x[P2_Y], capture_radius);
+      render_circle(renderer, vec2d_temp(game_x[P1_X], game_x[P1_Y]),
+                    capture_radius, CIRCLE_POINTS);
+      render_circle(renderer, vec2d_temp(game_x[P2_X], game_x[P2_Y]),
+                    capture_radius, CIRCLE_POINTS);
     }
 
     /* Advance simulation until a capture occurs */
@@ -374,24 +377,4 @@ static void game_u(double *x, size_t n, double dt) {
   x[E2_H] = atan2(ey2 - x[E2_Y], ex2 - x[E2_X]);
   x[P1_H] = atan2(py1 - x[P1_Y], px1 - x[P1_X]);
   x[P2_H] = atan2(py2 - x[P2_Y], px2 - x[P2_X]);
-}
-
-static void draw_circle(SDL_Renderer *renderer, int cx, int cy, int radius) {
-#define CIRCLE_POINTS (10)
-  SDL_Point points[CIRCLE_POINTS];
-
-  /* Calculate points */
-
-  for (unsigned i = 0; i < CIRCLE_POINTS; i++) {
-    points[i].x = cx + radius * cos((i * 2 * M_PI) / CIRCLE_POINTS);
-    points[i].y = cy + radius * sin((i * 2 * M_PI) / CIRCLE_POINTS);
-  }
-
-  /* Join points pairwise with lines */
-
-  for (unsigned i = 0; i < CIRCLE_POINTS; i++) {
-    unsigned j = (i + 1) % CIRCLE_POINTS;
-    SDL_RenderDrawLine(renderer, points[i].x, points[i].y, points[j].x,
-                       points[j].y);
-  }
 }

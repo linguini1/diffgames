@@ -2,10 +2,15 @@
 #define DIFFGAMES_UTILS_H
 
 #include <stdlib.h>
+#include <assert.h>
 
 /* Unused variable macro to ignore warnings */
 
 #define unused(var) (void)(var)
+
+/* Unreachable code */
+
+#define unreachable(msg) assert(0 && msg)
 
 /* Random double between min and max */
 
