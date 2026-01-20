@@ -1,2 +1,0 @@
-#define HELP_TEXT \
-"

@@ -35,21 +35,18 @@
 
 const char WINDOW_NAME[] = "2 Pursuers, 2 Evaders";
 
-/* State variable indexes */
+/* System state */
 
-enum var_e {
-  P1_X, /* Pursuer 1 X */
-  P1_Y, /* Pursuer 1 Y */
-  P1_H, /* Pursuer 1 heading */
-  P2_X, /* Pursuer 2 X */
-  P2_Y, /* Pursuer 2 Y */
-  P2_H, /* Pursuer 2 heading */
-  E1_X, /* Evader 1 X */
-  E1_Y, /* Evader 1 Y */
-  E1_H, /* Evader 1 heading */
-  E2_X, /* Evader 2 X */
-  E2_Y, /* Evader 2 Y */
-  E2_H, /* Evader 2 heading */
+struct player {
+  vec2d_t pos;
+  double heading;
+};
+
+struct game {
+  struct player p1;
+  struct player p2;
+  struct player e1;
+  struct player e2;
 };
 
 /* Game "constant" parameters */
@@ -73,12 +70,8 @@ static const double RATIOS[2][2] = {
 
 /* Game dynamics */
 
-static void game_f(double *x, size_t n, double dt);
-static void game_u(double *x, size_t n, double dt);
-
-static double dist(double x1, double y1, double x2, double y2) {
-  return sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
-}
+static void game_f(void *x, double dt);
+static void game_u(void *x, double dt);
 
 int main(int argc, char **argv) {
 
@@ -86,6 +79,7 @@ int main(int argc, char **argv) {
   SDL_DisplayMode dm = {0};
   SDL_DisplayMode tempdm;
   SDL_Event event;
+  struct game game_x;
   bool running = true;
   bool show_capture_radius = false;
   bool game_over = false;
@@ -148,21 +142,13 @@ int main(int argc, char **argv) {
   /* Set up game with random initial conditions */
 
   srand(time(NULL));
-  double game_x[] = {
-      [P1_X] = randval(0.0, dm.w / scale),
-      [P1_Y] = randval(0.0, dm.h / scale),
-      [P1_H] = 0.0,
-      [P2_X] = randval(0.0, dm.w / scale),
-      [P2_Y] = randval(0.0, dm.h / scale),
-      [P2_H] = 0.0,
-      [E1_X] = randval(0.0, dm.w / scale),
-      [E1_Y] = randval(0.0, dm.h / scale),
-      [E1_H] = 0.0,
-      [E2_X] = randval(0.0, dm.w / scale),
-      [E2_Y] = randval(0.0, dm.h / scale),
-      [E2_H] = 0.0,
-  };
-  dynsys_t game = DYNSYS_SINIT(game_x, game_f, game_u, NULL, NULL);
+
+  for (unsigned i = 0; i < 4; i++) {
+    ((struct player *)(&game_x))[i].pos.x = randval(0.0, dm.w / scale);
+    ((struct player *)(&game_x))[i].pos.y = randval(0.0, dm.h / scale);
+  }
+
+  dynsys_t game = DYNSYS_SINIT(&game_x, game_f, game_u, NULL, NULL);
 
   /* Simulation loop */
 
@@ -189,16 +175,11 @@ int main(int argc, char **argv) {
           show_capture_radius = !show_capture_radius;
           break;
         case SDLK_SPACE:
-          game_x[P1_X] = randval(0.0, dm.w / scale);
-          game_x[P1_Y] = randval(0.0, dm.h / scale);
-          game_x[P2_X] = randval(0.0, dm.w / scale);
-          game_x[P2_Y] = randval(0.0, dm.h / scale);
-          game_x[E1_X] = randval(0.0, dm.w / scale);
-          game_x[E1_Y] = randval(0.0, dm.h / scale);
-          game_x[E2_X] = randval(0.0, dm.w / scale);
-          game_x[E2_Y] = randval(0.0, dm.h / scale);
-          dynsys_init(&game, game_x, sizeof(game_x) / sizeof(double), game_f,
-                      game_u, NULL, NULL);
+          for (unsigned i = 0; i < 4; i++) {
+            ((struct player *)(&game_x))[i].pos.x = randval(0.0, dm.w / scale);
+            ((struct player *)(&game_x))[i].pos.y = randval(0.0, dm.h / scale);
+          }
+          dynsys_init(&game, &game_x, game_f, game_u, NULL, NULL);
           SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
           SDL_RenderClear(renderer);
           SDL_RenderPresent(renderer);
@@ -223,24 +204,22 @@ int main(int argc, char **argv) {
     /* Draw pursuers in red */
 
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
-    SDL_RenderDrawPoint(renderer, game_x[P1_X], game_x[P1_Y]);
-    SDL_RenderDrawPoint(renderer, game_x[P2_X], game_x[P2_Y]);
+    render_vec2d(renderer, &game_x.p1.pos);
+    render_vec2d(renderer, &game_x.p2.pos);
 
     /* Draw evaders in green */
 
     SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
-    SDL_RenderDrawPoint(renderer, game_x[E1_X], game_x[E1_Y]);
-    SDL_RenderDrawPoint(renderer, game_x[E2_X], game_x[E2_Y]);
+    render_vec2d(renderer, &game_x.e1.pos);
+    render_vec2d(renderer, &game_x.e2.pos);
 
     /* Draw pursuer capture radius in white */
 
     if ((show_capture_radius || game_over) &&
         !f_is_zero(capture_radius, 0.01)) {
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-      render_circle(renderer, vec2d_temp(game_x[P1_X], game_x[P1_Y]),
-                    capture_radius, CIRCLE_POINTS);
-      render_circle(renderer, vec2d_temp(game_x[P2_X], game_x[P2_Y]),
-                    capture_radius, CIRCLE_POINTS);
+      render_circle(renderer, &game_x.p1.pos, capture_radius, CIRCLE_POINTS);
+      render_circle(renderer, &game_x.p2.pos, capture_radius, CIRCLE_POINTS);
     }
 
     /* Show what was drawn */
@@ -252,23 +231,20 @@ int main(int argc, char **argv) {
     if ((show_capture_radius || game_over) &&
         !f_is_zero(capture_radius, 0.01)) {
       SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-      render_circle(renderer, vec2d_temp(game_x[P1_X], game_x[P1_Y]),
-                    capture_radius, CIRCLE_POINTS);
-      render_circle(renderer, vec2d_temp(game_x[P2_X], game_x[P2_Y]),
-                    capture_radius, CIRCLE_POINTS);
+      render_circle(renderer, &game_x.p1.pos, capture_radius, CIRCLE_POINTS);
+      render_circle(renderer, &game_x.p2.pos, capture_radius, CIRCLE_POINTS);
     }
 
     /* Advance simulation until a capture occurs */
 
-    game_over =
-        f_is_equal(dist(game_x[E1_X], game_x[E1_Y], game_x[P1_X], game_x[P1_Y]),
-                   capture_radius, CAPTURE_TOLERANCE) ||
-        f_is_equal(dist(game_x[E1_X], game_x[E1_Y], game_x[P2_X], game_x[P2_Y]),
-                   capture_radius, CAPTURE_TOLERANCE) ||
-        f_is_equal(dist(game_x[E2_X], game_x[E2_Y], game_x[P1_X], game_x[P1_Y]),
-                   capture_radius, CAPTURE_TOLERANCE) ||
-        f_is_equal(dist(game_x[E2_X], game_x[E2_Y], game_x[P2_X], game_x[P2_Y]),
-                   capture_radius, CAPTURE_TOLERANCE);
+    game_over = f_is_equal(vec2d_norm_r(&game_x.e1.pos, &game_x.p1.pos),
+                           capture_radius, CAPTURE_TOLERANCE) ||
+                f_is_equal(vec2d_norm_r(&game_x.e1.pos, &game_x.p2.pos),
+                           capture_radius, CAPTURE_TOLERANCE) ||
+                f_is_equal(vec2d_norm_r(&game_x.e2.pos, &game_x.p1.pos),
+                           capture_radius, CAPTURE_TOLERANCE) ||
+                f_is_equal(vec2d_norm_r(&game_x.e2.pos, &game_x.p2.pos),
+                           capture_radius, CAPTURE_TOLERANCE);
 
     if (!game_over) {
       dynsys_step(&game, TIMESTEP);
@@ -285,35 +261,36 @@ int main(int argc, char **argv) {
 }
 
 /* Dynamics of a single "simple" agent (holonomic) */
-static void player_f(double *x, double *y, double head, double vel, double dt) {
-  *x += dt * vel * cos(head);
-  *y += dt * vel * sin(head);
+static void player_f(struct player *p, double vel, double dt) {
+  p->pos.x += dt * vel * cos(p->heading);
+  p->pos.y += dt * vel * sin(p->heading);
 }
 
 /* Dynamics for all players */
-static void game_f(double *x, size_t n, double dt) {
-  unused(n);
-  player_f(&x[P1_X], &x[P1_Y], x[P1_H], P1_VEL, dt);
-  player_f(&x[P2_X], &x[P2_Y], x[P2_H], P2_VEL, dt);
-  player_f(&x[E1_X], &x[E1_Y], x[E1_H], E1_VEL, dt);
-  player_f(&x[E2_X], &x[E2_Y], x[E2_H], E2_VEL, dt);
+static void game_f(void *x, double dt) {
+  struct game *game = (struct game *)x;
+  player_f(&game->p1, P1_VEL, dt);
+  player_f(&game->p2, P2_VEL, dt);
+  player_f(&game->e1, E1_VEL, dt);
+  player_f(&game->e2, E2_VEL, dt);
 }
 
 static double y_ij(unsigned i, unsigned j, double *xp, double *xe, double *yp,
                    double *ye) {
 #define a(i, j) (RATIOS[i][j])
   return (ye[j] - a(i, j) * a(i, j) * yp[i] -
-          a(i, j) * dist(xp[i], yp[i], xe[j], ye[j])) /
+          a(i, j) * vec2d_norm_r(vec2d_temp(xp[i], yp[i]),
+                                 vec2d_temp(xe[j], ye[j]))) /
          (1.0 - (a(i, j) * a(i, j)));
 }
 
-static void opt_aimpoints(double *game_x, double *xe1, double *ye1, double *xe2,
-                          double *ye2, double *xp1, double *yp1, double *xp2,
-                          double *yp2) {
-  double xp[] = {game_x[P1_X], game_x[P2_X]};
-  double xe[] = {game_x[E1_X], game_x[E2_X]};
-  double yp[] = {game_x[P1_Y], game_x[P2_Y]};
-  double ye[] = {game_x[E1_Y], game_x[E2_Y]};
+static void opt_aimpoints(struct game *game, double *xe1, double *ye1,
+                          double *xe2, double *ye2, double *xp1, double *yp1,
+                          double *xp2, double *yp2) {
+  double xp[] = {game->p1.pos.x, game->p2.pos.x};
+  double xe[] = {game->e1.pos.x, game->e2.pos.x};
+  double yp[] = {game->p1.pos.y, game->p2.pos.y};
+  double ye[] = {game->e1.pos.y, game->e2.pos.y};
 
   double ys1 = y_ij(0, 0, xp, xe, yp, ye) + y_ij(1, 1, xp, xe, yp, ye);
   double ys2 = y_ij(0, 1, xp, xe, yp, ye) + y_ij(1, 0, xp, xe, yp, ye);
@@ -323,7 +300,7 @@ static void opt_aimpoints(double *game_x, double *xe1, double *ye1, double *xe2,
 #define a_21 (RATIOS[1][0])
 #define a_22 (RATIOS[1][1])
 #define a_den(a) (1.0 - ((a) * (a)))
-#define d(i, j) dist(xp[i], yp[i], xe[j], ye[j])
+#define d(i, j) vec2d_norm_r(vec2d_temp(xp[i], yp[i]), vec2d_temp(xe[j], ye[j]))
 
   if (ys1 > ys2) {
     /* Equation 10 */
@@ -352,8 +329,8 @@ static void opt_aimpoints(double *game_x, double *xe1, double *ye1, double *xe2,
   }
 }
 
-static void game_u(double *x, size_t n, double dt) {
-  unused(n);
+static void game_u(void *x, double dt) {
+  struct game *game = (struct game *)x;
   unused(dt);
 
   double ex1;
@@ -367,14 +344,14 @@ static void game_u(double *x, size_t n, double dt) {
 
   /* Calculate the optimal aim points for each agent */
 
-  opt_aimpoints(x, &ex1, &ey1, &ex2, &ey2, &px1, &py1, &px2, &py2);
+  opt_aimpoints(game, &ex1, &ey1, &ex2, &ey2, &px1, &py1, &px2, &py2);
 
   /* From the optimal aim points, we can compute the optimal headings. Taken
    * from Equation 9.
    */
 
-  x[E1_H] = atan2(ey1 - x[E1_Y], ex1 - x[E1_X]);
-  x[E2_H] = atan2(ey2 - x[E2_Y], ex2 - x[E2_X]);
-  x[P1_H] = atan2(py1 - x[P1_Y], px1 - x[P1_X]);
-  x[P2_H] = atan2(py2 - x[P2_Y], px2 - x[P2_X]);
+  game->e1.heading = atan2(ey1 - game->e1.pos.y, ex1 - game->e1.pos.x);
+  game->e2.heading = atan2(ey2 - game->e2.pos.y, ex2 - game->e2.pos.x);
+  game->p1.heading = atan2(py1 - game->p1.pos.y, px1 - game->p1.pos.x);
+  game->p2.heading = atan2(py2 - game->p2.pos.y, px2 - game->p2.pos.x);
 }

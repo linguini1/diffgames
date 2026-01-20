@@ -15,11 +15,10 @@ struct dynsys_t; /* Forward definition */
  * control variables.
  *
  * Parameters:
- * - x: The state variables of the dynamic system.
- * - n: The number of state variables
+ * - state: The private state (containing state variables) of the dynamic system
  * - dt: The amount of time passed since the last time-step
  */
-typedef void (*dynamics_f)(double *x, size_t n, double dt);
+typedef void (*dynamics_f)(void *state, double dt);
 
 /* Control input function u(t)
  *
@@ -29,12 +28,10 @@ typedef void (*dynamics_f)(double *x, size_t n, double dt);
  * state variables which correspond to the control variables for the system.
  *
  * Parameters:
- * - x: The state variables of the dynamic system. * - n: The number of state
- *      variables
- * - n: The number of state variables
+ * - state: The private state (containing state variables) of the dynamic system
  * - dt: The amount of time passed since the last time-step
  */
-typedef void (*control_f)(double *x, size_t n, double dt);
+typedef void (*control_f)(void *state, double dt);
 
 /* Running cost function g(x, t)
  *
@@ -42,13 +39,12 @@ typedef void (*control_f)(double *x, size_t n, double dt);
  * run-time.
  *
  * Parameters:
- * - x: The state variables of the dynamic system.
- * - n: The number of state variables
+ * - state: The private state (containing state variables) of the dynamic system
  * - dt: The amount of time passed since the last time-step
  *
  * Returns: The running cost incurred for the time-step of duration `dt`.
  */
-typedef double (*run_cost_f)(const double *x, size_t n, double dt);
+typedef double (*run_cost_f)(const void *state, double dt);
 
 /* Terminal cost function q(x)
  *
@@ -56,18 +52,16 @@ typedef double (*run_cost_f)(const double *x, size_t n, double dt);
  * system's run time using the state variables.
  *
  * Parameters:
- * - x: The state variables of the dynamic system.
- * - n: The number of state variables
+ * - state: The private state (containing state variables) of the dynamic system
  *
  * Returns: The terminal cost for the system's state `x`.
  */
-typedef double (*term_cost_f)(const double *x, size_t n);
+typedef double (*term_cost_f)(const void *x);
 
 /* Representation of a generic dynamic system */
 
 typedef struct dynsys_t {
-  double *x;     /* State vars */
-  size_t n;      /* Number of state vars */
+  void *x;       /* State vars */
   double c;      /* Game cost tally */
   dynamics_f f;  /* Dynamics function f(x, t) */
   control_f u;   /* Control function u(t) */
@@ -78,7 +72,6 @@ typedef struct dynsys_t {
 #define DYNSYS_SINIT(d_x, d_f, d_u, d_g, d_q)                                  \
   {                                                                            \
       .x = (d_x),                                                              \
-      .n = (sizeof(d_x) / sizeof(double)),                                     \
       .c = 0.0,                                                                \
       .f = (d_f),                                                              \
       .u = (d_u),                                                              \
@@ -92,8 +85,7 @@ typedef struct dynsys_t {
  *
  * Parameters:
  * - s: The dynamic system to initialize
- * - x: An array of `n` state variables
- * - n: The number of state variables in `x`
+ * - x: The private system state, including state variables
  * - f: The dynamics equations of the system
  * - u: The control input equation for the system. If NULL, the system runs
  *      from its initial conditions with no control.
@@ -101,8 +93,8 @@ typedef struct dynsys_t {
  * - q: The terminal cost equation. If NULL, the terminal cost is assumed to be
  *      0
  */
-void dynsys_init(dynsys_t *s, double *x, size_t n, dynamics_f f, control_f u,
-                 run_cost_f g, term_cost_f q);
+void dynsys_init(dynsys_t *s, void *x, dynamics_f f, control_f u, run_cost_f g,
+                 term_cost_f q);
 
 /* dynsys_step
  *
