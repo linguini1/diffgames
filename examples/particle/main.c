@@ -8,30 +8,31 @@
 
 #include "dynsys.h"
 #include "helptext.h"
+#include "render.h"
 #include "utils.h"
 
 #define TIMESTEP (0.01)
 
 static const char window_name[] = "Particle";
 
-static int mouse_x;
-static int mouse_y;
 static double scale = 5.0;
 static double p_vel = 50.0;
 
-enum state_e {
-  P_X, /* Cartesian x position */
-  P_Y, /* Cartesian y position */
-  P_H, /* Velocity in units/s */
+struct game {
+  vec2d_t ppos;
+  double heading;
+  int mousex;
+  int mousey;
 };
 
-static void particle_f(double *x, size_t n, double dt);
-static void particle_u(double *x, size_t n, double dt);
+static void particle_f(void *x, double dt);
+static void particle_u(void *x, double dt);
 
 int main(int argc, char **argv) {
   SDL_Event event;
   SDL_DisplayMode dm = {0};
   SDL_DisplayMode tempdm;
+  struct game game_x;
   bool running = true;
 
   int c;
@@ -95,12 +96,11 @@ int main(int argc, char **argv) {
 
   /* Set up particle with random initial conditons */
 
-  double x[] = {
-      [P_X] = randval(0, dm.w / scale), /* X pos */
-      [P_Y] = randval(0, dm.h / scale), /* Y pos */
-      [P_H] = 0,                        /* Heading */
-  };
-  dynsys_t particle = DYNSYS_SINIT(x, particle_f, particle_u, NULL, NULL);
+  game_x.ppos.x = randval(0, dm.w / scale);
+  game_x.ppos.y = randval(0, dm.h / scale);
+  game_x.mousex = 0;
+  game_x.mousey = 0;
+  dynsys_t game = DYNSYS_SINIT(&game_x, particle_f, particle_u, NULL, NULL);
 
   while (running) {
 
@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
 
     /* Draw agents */
 
-    SDL_RenderDrawPoint(renderer, x[P_X], x[P_Y]);
+    render_vec2d(renderer, &game_x.ppos);
 
     /* Show what was drawn */
 
@@ -152,8 +152,8 @@ int main(int argc, char **argv) {
 
     /* Advance simulation */
 
-    SDL_GetMouseState(&mouse_x, &mouse_y);
-    dynsys_step(&particle, TIMESTEP);
+    SDL_GetMouseState(&game_x.mousex, &game_x.mousey);
+    dynsys_step(&game, TIMESTEP);
   }
 
   /* Release resources */
@@ -167,20 +167,20 @@ int main(int argc, char **argv) {
 
 /* Particle dynamics. */
 
-static void particle_f(double *x, size_t n, double dt) {
-  unused(n);
-  x[P_X] += p_vel * dt * cos(x[P_H]);
-  x[P_Y] += p_vel * dt * sin(x[P_H]);
+static void particle_f(void *x, double dt) {
+  struct game *game = (struct game *)x;
+  game->ppos.x += p_vel * dt * cos(game->heading);
+  game->ppos.y += p_vel * dt * sin(game->heading);
 }
 
 /* Particle control function. Particle will always try to follow the cursor. */
 
-static void particle_u(double *x, size_t n, double dt) {
-  unused(n);
+static void particle_u(void *x, double dt) {
   unused(dt);
+  struct game *game = (struct game *)x;
 
   /* Compute a heading which moves towards the mouse position */
-  double dx = ((double)mouse_x / scale) - x[P_X];
-  double dy = ((double)mouse_y / scale) - x[P_Y];
-  x[P_H] = atan2(dy, dx);
+  double dx = ((double)game->mousex / scale) - game->ppos.x;
+  double dy = ((double)game->mousey / scale) - game->ppos.y;
+  game->heading = atan2(dy, dx);
 }
