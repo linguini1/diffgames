@@ -21,6 +21,7 @@ typedef struct {
 #define VEC3D_PRINTF(v) (v)->x, (v)->y, (v)->z
 
 #define VEC3D_SINIT(vx, vy, vz) {.x = (vx), .y = (vy), .z = (vz)}
+#define vec3d_temp(vx, vy) &((vec3d_t)VEC3D_SINIT(vx, vy))
 #define vec3d_get_axis(v, a) (((double *)(v))[(a)])
 
 void vec3d_init(vec3d_t *v, double x, double y, double z);
@@ -68,6 +69,7 @@ typedef struct {
 #define VEC2D_PRINTF(v) (v)->x, (v)->y
 
 #define VEC2D_SINIT(vx, vy) {.x = (vx), .y = (vy)}
+#define vec2d_temp(vx, vy) &((vec2d_t)VEC2D_SINIT(vx, vy))
 #define vec2d_get_axis(v, a) (((double *)(v))[(a)])
 
 void vec3d_project(vec3d_t *v, double camdist, vec2d_t *res);

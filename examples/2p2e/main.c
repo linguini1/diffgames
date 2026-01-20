@@ -237,10 +237,10 @@ int main(int argc, char **argv) {
     if ((show_capture_radius || game_over) &&
         !f_is_zero(capture_radius, 0.01)) {
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-      render_circle(renderer, game_x[P1_X], game_x[P1_Y], capture_radius,
-                    CIRCLE_POINTS);
-      render_circle(renderer, game_x[P2_X], game_x[P2_Y], capture_radius,
-                    CIRCLE_POINTS);
+      render_circle(renderer, vec2d_temp(game_x[P1_X], game_x[P1_Y]),
+                    capture_radius, CIRCLE_POINTS);
+      render_circle(renderer, vec2d_temp(game_x[P2_X], game_x[P2_Y]),
+                    capture_radius, CIRCLE_POINTS);
     }
 
     /* Show what was drawn */
@@ -252,10 +252,10 @@ int main(int argc, char **argv) {
     if ((show_capture_radius || game_over) &&
         !f_is_zero(capture_radius, 0.01)) {
       SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-      render_circle(renderer, game_x[P1_X], game_x[P1_Y], capture_radius,
-                    CIRCLE_POINTS);
-      render_circle(renderer, game_x[P2_X], game_x[P2_Y], capture_radius,
-                    CIRCLE_POINTS);
+      render_circle(renderer, vec2d_temp(game_x[P1_X], game_x[P1_Y]),
+                    capture_radius, CIRCLE_POINTS);
+      render_circle(renderer, vec2d_temp(game_x[P2_X], game_x[P2_Y]),
+                    capture_radius, CIRCLE_POINTS);
     }
 
     /* Advance simulation until a capture occurs */
