@@ -3,6 +3,26 @@
 
 #include <SDL2/SDL.h>
 
+#include "3dtools.h"
+
+/* Represents a camera whose POV is used to render 3D scenes */
+
+typedef struct {
+  vec3d_t pos;
+} camera_t;
+
+/* Draw a 3D
+ *
+ * Parameters:
+ * - renderer The SDL renderer used to draw
+ * - cx The circle's center x coordinate
+ * - cy The circle's center y coordinate
+ * - radius The radius of the circle
+ * - res The resolution of the circle (how many points to approximate it)
+ */
+void render_circle(SDL_Renderer *renderer, int cx, int cy, unsigned radius,
+                   unsigned res);
+
 /* Draw a circle.
  *
  * Parameters:
