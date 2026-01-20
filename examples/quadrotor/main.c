@@ -1,11 +1,13 @@
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
+#include <string.h>
 
 #include <SDL2/SDL.h>
 
 #include "dynsys.h"
+#include "render.h"
 #include "utils.h"
 
 #define TIMESTEP (0.01)
@@ -15,25 +17,12 @@ static const int width = 2048;
 static const int height = 1024;
 static const double scale = 8.0;
 
-/* State variable indices */
-
-enum state_e {
-  Q_F1,  /* Motor 1 thrust */
-  Q_F2,  /* Motor 2 thrust */
-  Q_F3,  /* Motor 3 thrust */
-  Q_F4,  /* Motor 4 thrust */
-  Q_X,   /* X position */
-  Q_Y,   /* Y position */
-  Q_Z,   /* Z position */
-  Q_R,   /* Roll */
-  Q_P,   /* Pitch */
-  Q_YW,  /* Yaw */
-  Q_VX,  /* X velocity */
-  Q_VY,  /* Y velocity */
-  Q_VZ,  /* Z velocity */
-  Q_VR,  /* Roll velocity */
-  Q_VP,  /* Pitch velocity */
-  Q_VYW, /* Yaw velocity */
+struct quadrotor {
+  vec3d_t pos;     /* Cartesian position */
+  vec3d_t rot;     /* Euler angles */
+  vec3d_t vel;     /* Cartesian velocity */
+  vec3d_t angvel;  /* Angular velocity */
+  double force[4]; /* Motor thrusts */
 };
 
 /* Parameters */
@@ -45,12 +34,13 @@ enum state_e {
 #define QUAD_J2 (0.05)    /* kgm^2 */
 #define QUAD_J3 (0.10)    /* kgm^2 */
 
-static void quad_f(double *x, size_t n, double dt);
-static void quad_u(double *x, size_t n, double dt);
+static void quad_f(void *x, double dt);
+static void quad_u(void *x, double dt);
 
 int main(int argc, char **argv) {
   unused(argc);
   unused(argv);
+  struct quadrotor quad;
   SDL_Rect fullscreen = {.x = 0, .y = 0, .w = width, .h = height};
 
   /* Set up OpenGL parameters */
@@ -79,25 +69,11 @@ int main(int argc, char **argv) {
 
   /* Set up particle with initial conditions */
 
-  double quad_x[] = {
-      [Q_F1] = 0.0,
-      [Q_F2] = 0.0,
-      [Q_F3] = 0.0,
-      [Q_F4] = 0.0,
-      [Q_X] = width / (2 * scale),
-      [Q_Y] = height / (2 * scale),
-      [Q_Z] = height / (2 * scale),
-      [Q_R] = 0.0,
-      [Q_P] = 0.0,
-      [Q_YW] = 0.0,
-      [Q_VX] = 0.0,
-      [Q_VY] = 0.0,
-      [Q_VZ] = 0.0,
-      [Q_VR] = 0.0,
-      [Q_VP] = 0.0,
-      [Q_VYW] = 0.0,
-  };
-  dynsys_t quad = DYNSYS_SINIT(quad_x, quad_f, quad_u, NULL, NULL);
+  memset(&quad, 0, sizeof(quad));
+  quad.pos.x = width / (2 * scale);
+  quad.pos.y = height / (2 * scale);
+  quad.pos.z = height / (2 * scale);
+  dynsys_t game = DYNSYS_SINIT(&quad, quad_f, quad_u, NULL, NULL);
 
   /* Render simulation */
 
@@ -149,7 +125,7 @@ int main(int argc, char **argv) {
      * x axis is the real x axis.
      */
 
-    SDL_RenderDrawPoint(renderer, quad_x[Q_X], quad_x[Q_Z]);
+    render_vec2d(renderer, vec2d_temp(quad.pos.x, quad.pos.z));
 
     /* Show what was drawn */
 
@@ -157,7 +133,7 @@ int main(int argc, char **argv) {
 
     /* Advance simulation */
 
-    dynsys_step(&quad, TIMESTEP);
+    dynsys_step(&game, TIMESTEP);
   }
 
   /* Release resources */
@@ -169,43 +145,50 @@ int main(int argc, char **argv) {
   return EXIT_SUCCESS;
 }
 
-static void quad_f(double *x, size_t n, double dt) {
-  (void)n;
+static void quad_f(void *x, double dt) {
+  struct quadrotor *quad = (struct quadrotor *)x;
 
-  double v1 = (x[Q_F1] + x[Q_F2] + x[Q_F3] + x[Q_F4]) / QUAD_MASS;
-  double v2 = (-x[Q_F1] - x[Q_F2] + x[Q_F3] + x[Q_F4]) / QUAD_J1;
-  double v3 = (-x[Q_F1] + x[Q_F2] + x[Q_F3] - x[Q_F4]) / QUAD_J2;
-  double v4 = (x[Q_F1] - x[Q_F2] + x[Q_F3] - x[Q_F4]) / QUAD_J3;
+  double v1 =
+      (quad->force[0] + quad->force[1] + quad->force[2] + quad->force[3]) /
+      QUAD_MASS;
+  double v2 =
+      (-quad->force[0] - quad->force[1] + quad->force[2] + quad->force[3]) /
+      QUAD_J1;
+  double v3 =
+      (-quad->force[0] + quad->force[1] + quad->force[2] - quad->force[3]) /
+      QUAD_J2;
+  double v4 =
+      (quad->force[0] - quad->force[1] + quad->force[2] - quad->force[3]) /
+      QUAD_J3;
 
-  x[Q_X] += dt * x[Q_VX];
-  x[Q_Y] += dt * x[Q_VY];
-  x[Q_Z] += dt * x[Q_VZ];
-  x[Q_R] += dt * x[Q_VR];
-  x[Q_P] += dt * x[Q_VP];
-  x[Q_YW] += dt * x[Q_VYW];
+  quad->pos.x += dt * quad->vel.x;
+  quad->pos.y += dt * quad->vel.y;
+  quad->pos.z += dt * quad->vel.z;
+  quad->rot.x += dt * quad->angvel.x;
+  quad->rot.y += dt * quad->angvel.y;
+  quad->rot.z += dt * quad->angvel.z;
 
-  x[Q_VX] +=
-      dt * v1 *
-      (cos(x[Q_P]) * sin(x[Q_R]) * cos(x[Q_YW]) + sin(x[Q_P]) * sin(x[Q_YW]));
-  x[Q_VY] +=
-      dt * v1 *
-      (sin(x[Q_R]) * sin(x[Q_YW]) * cos(x[Q_P]) - cos(x[Q_YW]) * sin(x[Q_P]));
-  x[Q_VZ] += dt * (v1 * (cos(x[Q_R]) * cos(x[Q_P])) - G);
-  x[Q_VR] += dt * v2 * ROTOR_LEN;
-  x[Q_VP] += dt * v3 * ROTOR_LEN;
-  x[Q_VYW] += dt * v4;
+  quad->vel.x += dt * v1 *
+                 (cos(quad->rot.y) * sin(quad->rot.x) * cos(quad->rot.z) +
+                  sin(quad->rot.y) * sin(quad->rot.z));
+  quad->vel.y += dt * v1 *
+                 (sin(quad->rot.x) * sin(quad->rot.z) * cos(quad->rot.y) -
+                  cos(quad->rot.z) * sin(quad->rot.y));
+  quad->vel.z += dt * (v1 * (cos(quad->rot.x) * cos(quad->rot.y)) - G);
+  quad->angvel.x += dt * v2 * ROTOR_LEN;
+  quad->angvel.y += dt * v3 * ROTOR_LEN;
+  quad->angvel.z += dt * v4;
 }
 
-static void quad_u(double *x, size_t n, double dt) {
-  (void)n;
+static void quad_u(void *x, double dt) {
+  struct quadrotor *quad = (struct quadrotor *)x;
+  static double t = 0;
 
   /* For fun, sine wave on the motors. Thrust in Newtons */
 
-  static double t = 0;
+  for (unsigned i = 0; i < 4; i++) {
+    quad->force[i] = 2.0 * sin(t);
+  }
 
-  x[Q_F1] = 2.0 * sin(t);
-  x[Q_F2] = 2.0 * sin(t);
-  x[Q_F3] = 2.0 * sin(t);
-  x[Q_F4] = 2.0 * sin(t);
   t += dt;
 }
