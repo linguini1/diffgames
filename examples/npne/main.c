@@ -357,7 +357,7 @@ int main(int argc, char **argv) {
     game_over = true;
     for (size_t p = 0; p < game_x.n; p++) {
       struct pair pair = game_x.assignments[opt_assign][p];
-      double dist = vec2d_norm_r(&game_x.pursuers[pair.i].pos,
+      double dist = vec2d_dist_r(&game_x.pursuers[pair.i].pos,
                                  &game_x.evaders[pair.j].pos);
       if (dist > game_x.capture_radius &&
           !f_is_equal(dist, game_x.capture_radius, CAPTURE_TOLERANCE)) {
@@ -401,7 +401,7 @@ static void game_f(void *x, double dt) {
 
 static double y_ij(size_t i, size_t j, struct game *g) {
   return (g->evaders[j].pos.y - a(g, i, j) * a(g, i, j) * g->pursuers[i].pos.y -
-          a(g, i, j) * vec2d_norm_r(&g->pursuers[i].pos, &g->evaders[j].pos)) /
+          a(g, i, j) * vec2d_dist_r(&g->pursuers[i].pos, &g->evaders[j].pos)) /
          (1.0 - (a(g, i, j) * a(g, i, j)));
 }
 
@@ -417,7 +417,7 @@ static double y_s(struct game *g, size_t a) {
 static void compute_aimpoints(size_t i, size_t j, struct game *g, double *xaim,
                               double *yaim) {
   double aij2 = (a(g, i, j) * a(g, i, j));
-  double dij = vec2d_norm_r(&g->pursuers[i].pos, &g->evaders[j].pos);
+  double dij = vec2d_dist_r(&g->pursuers[i].pos, &g->evaders[j].pos);
 
   *xaim = (g->evaders[j].pos.x - aij2 * g->pursuers[i].pos.x) / (1.0 - aij2);
   *yaim =
