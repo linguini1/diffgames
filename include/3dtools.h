@@ -55,8 +55,11 @@ double vec3d_dot_r(vec3d_t *v1, vec3d_t *v2);
 void vec3d_rotate(vec3d_t *v, double angle, enum axis_e axis, vec3d_t *res);
 vec3d_t vec3d_rotate_r(vec3d_t *v, double angle, enum axis_e axis);
 
-void vec3d_norm(vec3d_t *v1, vec3d_t *v2, double *res);
-double vec3d_norm_r(vec3d_t *v1, vec3d_t *v2);
+void vec3d_norm(vec3d_t *v, double *res);
+double vec3d_norm_r(vec3d_t *v);
+
+void vec3d_dist(vec3d_t *v1, vec3d_t *v2, double *res);
+double vec3d_dist_r(vec3d_t *v1, vec3d_t *v2);
 
 /* Vector in 2 dimensions */
 
@@ -101,7 +104,10 @@ vec2d_t vec2d_scale_r(vec2d_t *v, double alpha);
 
 double vec2d_dot_r(vec2d_t *v1, vec2d_t *v2);
 
-void vec2d_norm(vec2d_t *v1, vec2d_t *v2, double *res);
-double vec2d_norm_r(vec2d_t *v1, vec2d_t *v2);
+void vec2d_norm(vec2d_t *v, double *res);
+double vec2d_norm_r(vec2d_t *v);
+
+void vec2d_dist(vec2d_t *v1, vec2d_t *v2, double *res);
+double vec2d_dist_r(vec2d_t *v1, vec2d_t *v2);
 
 #endif // DIFFGAMES_3DTOOLS_H

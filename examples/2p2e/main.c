@@ -237,13 +237,13 @@ int main(int argc, char **argv) {
 
     /* Advance simulation until a capture occurs */
 
-    game_over = f_is_equal(vec2d_norm_r(&game_x.e1.pos, &game_x.p1.pos),
+    game_over = f_is_equal(vec2d_dist_r(&game_x.e1.pos, &game_x.p1.pos),
                            capture_radius, CAPTURE_TOLERANCE) ||
-                f_is_equal(vec2d_norm_r(&game_x.e1.pos, &game_x.p2.pos),
+                f_is_equal(vec2d_dist_r(&game_x.e1.pos, &game_x.p2.pos),
                            capture_radius, CAPTURE_TOLERANCE) ||
-                f_is_equal(vec2d_norm_r(&game_x.e2.pos, &game_x.p1.pos),
+                f_is_equal(vec2d_dist_r(&game_x.e2.pos, &game_x.p1.pos),
                            capture_radius, CAPTURE_TOLERANCE) ||
-                f_is_equal(vec2d_norm_r(&game_x.e2.pos, &game_x.p2.pos),
+                f_is_equal(vec2d_dist_r(&game_x.e2.pos, &game_x.p2.pos),
                            capture_radius, CAPTURE_TOLERANCE);
 
     if (!game_over) {
@@ -279,7 +279,7 @@ static double y_ij(unsigned i, unsigned j, double *xp, double *xe, double *yp,
                    double *ye) {
 #define a(i, j) (RATIOS[i][j])
   return (ye[j] - a(i, j) * a(i, j) * yp[i] -
-          a(i, j) * vec2d_norm_r(vec2d_temp(xp[i], yp[i]),
+          a(i, j) * vec2d_dist_r(vec2d_temp(xp[i], yp[i]),
                                  vec2d_temp(xe[j], ye[j]))) /
          (1.0 - (a(i, j) * a(i, j)));
 }
@@ -300,7 +300,7 @@ static void opt_aimpoints(struct game *game, double *xe1, double *ye1,
 #define a_21 (RATIOS[1][0])
 #define a_22 (RATIOS[1][1])
 #define a_den(a) (1.0 - ((a) * (a)))
-#define d(i, j) vec2d_norm_r(vec2d_temp(xp[i], yp[i]), vec2d_temp(xe[j], ye[j]))
+#define d(i, j) vec2d_dist_r(vec2d_temp(xp[i], yp[i]), vec2d_temp(xe[j], ye[j]))
 
   if (ys1 > ys2) {
     /* Equation 10 */

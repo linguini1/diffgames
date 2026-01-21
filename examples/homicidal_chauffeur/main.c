@@ -211,7 +211,7 @@ int main(int argc, char **argv) {
      * the capture.
      */
 
-    double curdist = vec2d_norm_r(&game_x.chauf.pos, &game_x.ped.pos);
+    double curdist = vec2d_dist_r(&game_x.chauf.pos, &game_x.ped.pos);
     game_over = curdist <= capture_radius;
 
     if (!game_over) {

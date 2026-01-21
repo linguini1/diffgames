@@ -54,15 +54,25 @@ void vec3d_rotate(vec3d_t *v, double angle, enum axis_e axis, vec3d_t *res) {
   }
 }
 
-void vec3d_norm(vec3d_t *v1, vec3d_t *v2, double *res) {
-  *res = sqrt((v2->x - v1->x) * (v2->x - v1->x) +
-              (v2->y - v1->y) * (v2->y - v1->y) +
-              (v2->z - v1->z) * (v2->z - v1->z));
+void vec3d_norm(vec3d_t *v, double *res) {
+  *res = sqrt((v->x * v->x) + (v->y * v->y) + (v->z * v->z));
 }
 
-double vec3d_norm_r(vec3d_t *v1, vec3d_t *v2) {
+double vec3d_norm_r(vec3d_t *v) {
   double res;
-  vec3d_norm(v1, v2, &res);
+  vec3d_norm(v, &res);
+  return res;
+}
+
+void vec3d_dist(vec3d_t *v1, vec3d_t *v3, double *res) {
+  vec3d_t reflect = vec3d_scale_r(v3, -1);
+  reflect = vec3d_add_r(v1, &reflect);
+  vec3d_norm(&reflect, res);
+}
+
+double vec3d_dist_r(vec3d_t *v1, vec3d_t *v3) {
+  double res;
+  vec3d_dist(v1, v3, &res);
   return res;
 }
 
@@ -109,13 +119,24 @@ double vec2d_dot_r(vec2d_t *v1, vec2d_t *v2) {
   return res;
 }
 
-void vec2d_norm(vec2d_t *v1, vec2d_t *v2, double *res) {
-  *res = sqrt((v2->x - v1->x) * (v2->x - v1->x) +
-              (v2->y - v1->y) * (v2->y - v1->y));
+void vec2d_norm(vec2d_t *v, double *res) {
+  *res = sqrt(v->x * v->x + v->y * v->y);
 }
 
-double vec2d_norm_r(vec2d_t *v1, vec2d_t *v2) {
+double vec2d_norm_r(vec2d_t *v) {
   double res;
-  vec2d_norm(v1, v2, &res);
+  vec2d_norm(v, &res);
+  return res;
+}
+
+void vec2d_dist(vec2d_t *v1, vec2d_t *v2, double *res) {
+  vec2d_t reflect = vec2d_scale_r(v2, -1);
+  reflect = vec2d_add_r(v1, &reflect);
+  vec2d_norm(&reflect, res);
+}
+
+double vec2d_dist_r(vec2d_t *v1, vec2d_t *v2) {
+  double res;
+  vec2d_dist(v1, v2, &res);
   return res;
 }
