@@ -59,6 +59,10 @@ A particle which follows your mouse forever.
 
 An example of a 2 pursuer, 2 evader differential game.
 
-Press 'r' to toggle showing the capture radius of the pursuers.
-
 ![2P2E](./docs/2p2e.png)
+
+### N Pursuers N Evaders
+
+An example of a N pursuer, N evader differential game.
+
+![4P4E](./docs/4p4e.png)

@@ -1,0 +1,37 @@
+N Pursuers, M Evaders
+
+DESCRIPTION:
+    This game is based on the paper "Multiple Pursuers Multiple Evader
+    Differential Games" by Eloy Garcia, David W. Casbeer, Alexander Von Moll and
+    Meir Pachter.
+
+    The game consists of N pursuers and M evaders, where N = M. The goal of the
+    pursuers is to capture the evaders (come within some capture radius distance
+    of the evaders) in the shortest time possible. The evaders aim to avoid
+    capture for as long as possible.
+
+    Pursuers are always faster than evaders. All agents have holonomic motion in
+    an infinite 2D plane. The players are controlled by their optimal control
+    signals from Section IV-A of the paper. At run-time, the players are all
+    assigned random initial conditions (start locations and headings), as well
+    as a random velocity within some allowable range. Pursuer velocities are
+    within [30, 40] and evader velocities are within [10, 29].
+
+USAGE:
+    npme [OPTIONS]
+
+OPTIONS:
+    -h          Display this help text.
+    -x <width>  Window width in pixels. Default is half screen width.
+    -y <height> Window height in pixels. Default is half screen height.
+    -s <scale>  Rendering scale. Default 5.
+    -r <radius> Capture radius of the pursuers in meters. Default 0.
+    -n <num>    Number of pursuers and evaders. Default 2.
+
+CONTROLS:
+    This game is visualized using SDL2 and accepts keyboard input.
+
+    q           Quit the game.
+    Esc         Quit the game.
+    r           Toggle visualization of the pursuer capture radius.
+    Space       Re-seed and re-start the game.
