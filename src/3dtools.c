@@ -13,25 +13,32 @@ void vec3d_init(vec3d_t *v, double x, double y, double z) {
   v->z = z;
 }
 
-vec3d_t vec3d_add_r(vec3d_t *v1, vec3d_t *v2) {
+vec3d_t vec3d_add_r(const vec3d_t *v1, const vec3d_t *v2) {
   vec3d_t res;
   vec3d_add(v1, v2, &res);
   return res;
 }
 
-vec3d_t vec3d_scale_r(vec3d_t *v, double alpha) {
+vec3d_t vec3d_sub_r(const vec3d_t *v1, const vec3d_t *v2) {
+  vec3d_t res;
+  vec3d_sub(v1, v2, &res);
+  return res;
+}
+
+vec3d_t vec3d_scale_r(const vec3d_t *v, double alpha) {
   vec3d_t res;
   vec3d_scale(v, alpha, &res);
   return res;
 }
 
-double vec3d_dot_r(vec3d_t *v1, vec3d_t *v2) {
+double vec3d_dot_r(const vec3d_t *v1, const vec3d_t *v2) {
   double res;
   vec3d_dot(v1, v2, res);
   return res;
 }
 
-void vec3d_rotate(vec3d_t *v, double angle, enum axis_e axis, vec3d_t *res) {
+void vec3d_rotate(const vec3d_t *v, double angle, enum axis_e axis,
+                  vec3d_t *res) {
   switch (axis) {
   case AXIS_X:
     res->x = v->x;
@@ -54,43 +61,31 @@ void vec3d_rotate(vec3d_t *v, double angle, enum axis_e axis, vec3d_t *res) {
   }
 }
 
-void vec3d_norm(vec3d_t *v, double *res) {
+void vec3d_norm(const vec3d_t *v, double *res) {
   *res = sqrt((v->x * v->x) + (v->y * v->y) + (v->z * v->z));
 }
 
-double vec3d_norm_r(vec3d_t *v) {
+double vec3d_norm_r(const vec3d_t *v) {
   double res;
   vec3d_norm(v, &res);
   return res;
 }
 
-void vec3d_dist(vec3d_t *v1, vec3d_t *v3, double *res) {
-  vec3d_t reflect = vec3d_scale_r(v3, -1);
-  reflect = vec3d_add_r(v1, &reflect);
-  vec3d_norm(&reflect, res);
+void vec3d_dist(const vec3d_t *v1, const vec3d_t *v2, double *res) {
+  vec3d_t diff;
+  vec3d_sub(v1, v2, &diff);
+  vec3d_norm(&diff, res);
 }
 
-double vec3d_dist_r(vec3d_t *v1, vec3d_t *v3) {
+double vec3d_dist_r(const vec3d_t *v1, const vec3d_t *v2) {
   double res;
-  vec3d_dist(v1, v3, &res);
+  vec3d_dist(v1, v2, &res);
   return res;
 }
 
-vec3d_t vec3d_rotate_r(vec3d_t *v, double angle, enum axis_e axis) {
+vec3d_t vec3d_rotate_r(const vec3d_t *v, double angle, enum axis_e axis) {
   vec3d_t res;
   vec3d_rotate(v, angle, axis, &res);
-  return res;
-}
-
-void vec3d_project(vec3d_t *v, double camdist, vec2d_t *res) {
-  /* TODO: verify */
-  res->x = v->x / (v->z / camdist);
-  res->y = v->y / (v->z / camdist);
-}
-
-vec2d_t vec3d_project_r(vec3d_t *v, double camdist) {
-  vec2d_t res;
-  vec3d_project(v, camdist, &res);
   return res;
 }
 
@@ -101,42 +96,85 @@ void vec2d_init(vec2d_t *v, double x, double y) {
   v->y = y;
 }
 
-vec2d_t vec2d_add_r(vec2d_t *v1, vec2d_t *v2) {
+vec2d_t vec2d_add_r(const vec2d_t *v1, const vec2d_t *v2) {
   vec2d_t res;
   vec2d_add(v1, v2, &res);
   return res;
 }
 
-vec2d_t vec2d_scale_r(vec2d_t *v, double alpha) {
+vec2d_t vec2d_scale_r(const vec2d_t *v, double alpha) {
   vec2d_t res;
   vec2d_scale(v, alpha, &res);
   return res;
 }
 
-double vec2d_dot_r(vec2d_t *v1, vec2d_t *v2) {
+double vec2d_dot_r(const vec2d_t *v1, const vec2d_t *v2) {
   double res;
   vec2d_dot(v1, v2, res);
   return res;
 }
 
-void vec2d_norm(vec2d_t *v, double *res) {
+void vec2d_norm(const vec2d_t *v, double *res) {
   *res = sqrt(v->x * v->x + v->y * v->y);
 }
 
-double vec2d_norm_r(vec2d_t *v) {
+double vec2d_norm_r(const vec2d_t *v) {
   double res;
   vec2d_norm(v, &res);
   return res;
 }
 
-void vec2d_dist(vec2d_t *v1, vec2d_t *v2, double *res) {
-  vec2d_t reflect = vec2d_scale_r(v2, -1);
-  reflect = vec2d_add_r(v1, &reflect);
-  vec2d_norm(&reflect, res);
+void vec2d_dist(const vec2d_t *v1, const vec2d_t *v2, double *res) {
+  vec2d_t diff;
+  vec2d_sub(v1, v2, &diff);
+  vec2d_norm(&diff, res);
 }
 
-double vec2d_dist_r(vec2d_t *v1, vec2d_t *v2) {
+double vec2d_dist_r(const vec2d_t *v1, const vec2d_t *v2) {
   double res;
   vec2d_dist(v1, v2, &res);
+  return res;
+}
+
+void camera_trans(const vec3d_t *v, const camera3d_t *cam, vec3d_t *res) {
+  /* https://en.wikipedia.org/wiki/3D_projection#Mathematical_formula */
+  vec3d_t diff;
+  vec3d_sub(v, &cam->pos, &diff);
+
+  double large_term =
+      diff.z * cos(cam->ori.y) +
+      sin(cam->ori.y) * (diff.y * sin(cam->ori.z) + diff.x * cos(cam->ori.z));
+
+  res->x =
+      cos(cam->ori.y) * (diff.y * sin(cam->ori.z) + diff.x * cos(cam->ori.z)) -
+      diff.z * sin(cam->ori.y);
+  res->y =
+      sin(cam->ori.x) * large_term +
+      cos(cam->ori.x) * (diff.y * cos(cam->ori.z) - diff.x * sin(cam->ori.z));
+  res->z =
+      cos(cam->ori.x) * large_term -
+      sin(cam->ori.x) * (diff.y * cos(cam->ori.z) - diff.x * sin(cam->ori.z));
+}
+
+vec3d_t camera_trans_r(const vec3d_t *v, const camera3d_t *cam) {
+  vec3d_t res;
+  camera_trans(v, cam, &res);
+  return res;
+}
+
+void camera_proj(const vec3d_t *v, const camera3d_t *cam, vec2d_t *res) {
+  /* https://en.wikipedia.org/wiki/3D_projection#Mathematical_formula
+   * Uses x/y projection plane.
+   * We use display surface at 0,0, so e = c
+   */
+  vec3d_t d;
+  camera_trans(v, cam, &d);
+  res->x = (cam->pos.z * d.x) / d.z + cam->pos.x;
+  res->y = (cam->pos.z * d.y) / d.z + cam->pos.y;
+}
+
+vec2d_t camera_proj_r(const vec3d_t *v, const camera3d_t *cam) {
+  vec2d_t res;
+  camera_proj(v, cam, &res);
   return res;
 }
