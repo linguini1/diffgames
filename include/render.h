@@ -5,12 +5,6 @@
 
 #include "3dtools.h"
 
-/* Represents a camera whose POV is used to render 3D scenes */
-
-typedef struct {
-  vec3d_t pos;
-} camera3d_t;
-
 /* Short-hands for rendering vector-defined things */
 
 #define render_vec2d(renderer, v) SDL_RenderDrawPoint(renderer, (v)->x, (v)->y)

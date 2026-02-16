@@ -1,0 +1,19 @@
+3D Test
+
+DESCRIPTION:
+    3D rendering test. Not a differential game.
+
+USAGE:
+    3dtest [OPTIONS]
+
+OPTIONS:
+    -h          Display this help text.
+    -x <width>  Window width in pixels. Default is half screen width.
+    -y <height> Window height in pixels. Default is half screen height.
+    -s <scale>  Rendering scale. Default 5.
+
+CONTROLS:
+    This game is visualized using SDL2 and accepts keyboard input.
+
+    q           Quit the game.
+    Esc         Quit the game.
