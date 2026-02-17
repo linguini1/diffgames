@@ -138,4 +138,29 @@ vec3d_t camera_trans_r(const vec3d_t *v, const camera3d_t *cam);
 void camera_proj(const vec3d_t *v, const camera3d_t *cam, vec2d_t *res);
 vec2d_t camera_proj_r(const vec3d_t *v, const camera3d_t *cam);
 
+/* Edge between two vertices associated with indexes i, j */
+
+struct edge {
+  size_t i;
+  size_t j;
+};
+
+/* Represents an object to be rendered that has vertices and edges which connect
+ * them.
+ */
+
+typedef struct {
+  vec3d_t *vertices;
+  size_t nverts;
+  struct edge *edges;
+  size_t nedges;
+} obj3d_t;
+
+typedef struct {
+  vec2d_t *vertices;
+  size_t nverts;
+  struct edge *edges;
+  size_t nedges;
+} obj2d_t;
+
 #endif // DIFFGAMES_3DTOOLS_H
