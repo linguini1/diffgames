@@ -9,6 +9,10 @@ CFLAGS += $(WARNINGS)
 CFLAGS += -I include
 CFLAGS += -lm
 
+ifneq ($(DEBUG),)
+CFLAGS += -DCONFIG_DEBUG
+endif
+
 ifeq ($(OS), Windows_NT)
 SDL_PATH = C:/MinGW/SDL2-2.32.10/i686-w64-mingw32
 CFLAGS += -I $(SDL_PATH)/include
