@@ -5,13 +5,21 @@ DESCRIPTION:
     optimal formation of an ad-hoc aerial network that provides connection to
     independently moving evaders.
 
+    Pursuers (red) are given a random initial position within the 3D simulation
+    space. Evaders (green) are given a random initial position on the XY plane
+    at z = 0 (ground plane). Both agent types have simple motion (holonomic).
+    The goal of the pursuers is to minimize path-loss of an RF signal
+    transmitted from the pursuers to the evaders (and from pursuers to other
+    pursuers), while the evaders aim to maximize the path-loss.
+
 USAGE:
     adhoc-nm [OPTIONS]
 
 OPTIONS:
     -h          Display this help text.
-    -x <width>  Window width in pixels. Default is half screen width.
-    -y <height> Window height in pixels. Default is half screen height.
+    -x <width>  Window/simulation width in pixels. Default 1/2 screen width.
+    -y <height> Window/simulation height in pixels. Default 1/2 screen height.
+    -z <height> Height of the z-dimension in the simulation. Default 100.
     -s <scale>  Rendering scale. Default 5.
     -l <loss>   Maximum allowable loss for a connection in dB. Default 45.0.
     -m <m>      Number of evaders m > 0. Default 1.
@@ -23,3 +31,4 @@ CONTROLS:
     q           Quit the game.
     Esc         Quit the game.
     Space       Re-seed and re-start the game.
+    n           Render the network connections.
