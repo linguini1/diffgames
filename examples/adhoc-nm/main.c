@@ -7,8 +7,8 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include <SDL2/SDL.h>
@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
   SDL_Event event;
   struct game game_x;
   bool running = true;
-  bool show_capture_radius = false;
+  bool show_network = false;
   bool game_over = false;
   camera3d_t camera;
 
@@ -82,9 +82,10 @@ int main(int argc, char **argv) {
 
   game_x.m = 1;
   game_x.n = 1;
+  size_t z_height = 100;
 
   int c;
-  while ((c = getopt(argc, argv, ":hx:y:s:m:n:l:")) != -1) {
+  while ((c = getopt(argc, argv, ":hx:y:z:s:m:n:l:")) != -1) {
     switch (c) {
     case 'h':
       puts(HELP_TEXT);
@@ -95,6 +96,9 @@ int main(int argc, char **argv) {
       break;
     case 'y':
       dm.h = strtoul(optarg, NULL, 10);
+      break;
+    case 'z':
+      z_height = strtoul(optarg, NULL, 10);
       break;
     case 'l':
       l_max = strtod(optarg, NULL);
@@ -135,7 +139,7 @@ int main(int argc, char **argv) {
   vec2d_t screen_center =
       VEC2D_SINIT(dm.w / (2.0 * scale), dm.h / (2.0 * scale));
   SDL_Rect fullscreen = {.x = 0, .y = 0, .w = dm.w, .h = dm.h};
-  vec3d_t dimensions = VEC3D_SINIT(dm.w / scale, dm.w / scale, dm.h / scale);
+  vec3d_t dimensions = VEC3D_SINIT(dm.w / scale, dm.w / scale, z_height);
 
   /* Set up camera for rendering
    *
@@ -207,8 +211,8 @@ int main(int argc, char **argv) {
         case SDLK_q:
           running = false;
           break;
-        case SDLK_r:
-          show_capture_radius = !show_capture_radius;
+        case SDLK_n:
+          show_network = !show_network;
           break;
         case SDLK_SPACE:
           game_seed(&game_x, &dimensions);
@@ -234,6 +238,34 @@ int main(int argc, char **argv) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 10);
     SDL_RenderFillRect(renderer, &fullscreen);
 
+    /* Show networking lines */
+
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+
+    for (size_t i = 0; i < game_x.n && show_network; i++) {
+
+      /* Pursuer to evaders */
+
+      for (size_t j = 0; j < game_x.m; j++) {
+        if (vec3d_dist_r(&game_x.p[i].pos, &game_x.e[j].pos) <=
+            capture_radius) {
+          SDL_RenderDrawLine(renderer, game_x.p[i].pos.x, game_x.p[i].pos.y,
+                             game_x.e[j].pos.x, game_x.e[j].pos.y);
+        }
+      }
+
+      /* Pursuer to other pursuers */
+
+      for (size_t k = 0; k < game_x.n; k++) {
+        if (i == k) continue;
+        if (vec3d_dist_r(&game_x.p[i].pos, &game_x.p[k].pos) <=
+            capture_radius) {
+          SDL_RenderDrawLine(renderer, game_x.p[i].pos.x, game_x.p[i].pos.y,
+                             game_x.p[k].pos.x, game_x.p[k].pos.y);
+        }
+      }
+    }
+
     /* Draw pursuers in red */
 
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
@@ -248,13 +280,37 @@ int main(int argc, char **argv) {
       render_vec2d(renderer, &game_x.e[j].pos);
     }
 
-    /* Draw radius of L_max in white (this is a sphere) TODO */
-
     /* Show what was drawn */
 
     SDL_RenderPresent(renderer);
 
-    /* Clear pursuer capture radius before next slide TODO */
+    /* Hide networking lines */
+
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+
+    for (size_t i = 0; i < game_x.n && show_network; i++) {
+
+      /* Pursuer to evaders */
+
+      for (size_t j = 0; j < game_x.m; j++) {
+        if (vec3d_dist_r(&game_x.p[i].pos, &game_x.e[j].pos) <=
+            capture_radius) {
+          SDL_RenderDrawLine(renderer, game_x.p[i].pos.x, game_x.p[i].pos.y,
+                             game_x.e[j].pos.x, game_x.e[j].pos.y);
+        }
+      }
+
+      /* Pursuer to other pursuers */
+
+      for (size_t k = 0; k < game_x.n; k++) {
+        if (i == k) continue;
+        if (vec3d_dist_r(&game_x.p[i].pos, &game_x.p[k].pos) <=
+            capture_radius) {
+          SDL_RenderDrawLine(renderer, game_x.p[i].pos.x, game_x.p[i].pos.y,
+                             game_x.p[k].pos.x, game_x.p[k].pos.y);
+        }
+      }
+    }
 
     /* TODO: Compute terminal condition based on network fragmentation
      *
