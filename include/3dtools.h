@@ -141,8 +141,8 @@ vec2d_t camera_proj_r(const vec3d_t *v, const camera3d_t *cam);
 /* Edge between two vertices associated with indexes i, j */
 
 struct edge {
-  size_t i;
-  size_t j;
+  unsigned long i;
+  unsigned long j;
 };
 
 /* Represents an object to be rendered that has vertices and edges which connect
@@ -151,16 +151,16 @@ struct edge {
 
 typedef struct {
   vec3d_t *vertices;
-  size_t nverts;
+  unsigned long nverts;
   struct edge *edges;
-  size_t nedges;
+  unsigned long nedges;
 } obj3d_t;
 
 typedef struct {
   vec2d_t *vertices;
-  size_t nverts;
+  unsigned long nverts;
   struct edge *edges;
-  size_t nedges;
+  unsigned long nedges;
 } obj2d_t;
 
 #endif // DIFFGAMES_3DTOOLS_H

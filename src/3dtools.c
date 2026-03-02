@@ -55,9 +55,6 @@ void vec3d_rotate(const vec3d_t *v, double angle, enum axis_e axis,
     res->y = v->x * sin(angle) + v->y * cos(angle);
     res->z = v->z;
     break;
-  default:
-    unreachable("No such axis.");
-    break;
   }
 }
 

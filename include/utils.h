@@ -8,9 +8,6 @@
 
 #define unused(var) (void)(var)
 
-/* Unreachable code */
-
-#define unreachable(msg) assert(0 && msg)
 #define todo(msg) assert(0 && "[TODO] " msg)
 
 /* Random double between min and max */
