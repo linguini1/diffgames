@@ -396,19 +396,6 @@ static void game_u(void *x, double dt) {
       l_zi += game->p[i].pos.z / denom;
     }
 
-    /* Second term, sum over other pursuers */
-
-    for (size_t k = 0; k < game->n; k++) {
-      if (k == i) continue;
-
-      denom = pow(game->p[i].pos.x - game->p[k].pos.x, 2) +
-              pow(game->p[i].pos.y - game->p[k].pos.y, 2) +
-              pow(game->p[i].pos.z - game->p[k].pos.z, 2);
-      l_xi += (game->p[i].pos.x - game->p[k].pos.x) / denom;
-      l_yi += (game->p[i].pos.y - game->p[k].pos.y) / denom;
-      l_zi += (game->p[i].pos.z - game->p[k].pos.z) / denom;
-    }
-
     /* Multiplicative constant */
 
     l_xi *= c;
