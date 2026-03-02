@@ -15,7 +15,8 @@
 "simulation. Default 100.\n    -s <scale>  Rendering scale. Default 5.\n    -" \
 "l <loss>   Maximum allowable loss for a connection in dB. Default 45.0.\n   " \
 " -m <m>      Number of evaders m > 0. Default 1.\n    -n <n>      Number of " \
-"evaders n > 0. Default 1.\n\nCONTROLS:\n    This game is visualized using SD" \
-"L2 and accepts keyboard input.\n\n    q           Quit the game.\n    Esc   " \
-"      Quit the game.\n    Space       Re-seed and re-start the game.\n    n " \
-"          Render the network connections.\n"
+"evaders n > 0. Default 1.\n    -r          Enables random walk motion for ev" \
+"aders.\n\nCONTROLS:\n    This game is visualized using SDL2 and accepts keyb" \
+"oard input.\n\n    q           Quit the game.\n    Esc         Quit the game" \
+".\n    Space       Re-seed and re-start the game.\n    n           Render th" \
+"e network connections.\n"

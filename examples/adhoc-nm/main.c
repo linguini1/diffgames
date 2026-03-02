@@ -41,11 +41,13 @@ struct game {
 
 /* Game "constant" parameters */
 
-static double l_max = 45.0; /* Maximum path loss in dB */
+static bool random_walk = false; /* Evader movement is random */
+static double l_max = 45.0;      /* Maximum path loss in dB */
 
-#define LAMBDA (0.32764203) /* Wave-length in meters (915MHz) */
-#define V_P (20.0)          /* Pursuer velocity in m/s */
-#define V_E (10.0)          /* Evader velocity in m/s */
+#define LAMBDA (0.32764203)        /* Wave-length in meters (915MHz) */
+#define V_P (40.0)                 /* Pursuer velocity in m/s */
+#define V_E (20.0)                 /* Evader velocity in m/s */
+#define RANDWALK_ERRATICISIM (0.1) /* How erratic the random walk is. */
 
 /* Game dynamics */
 
@@ -57,6 +59,7 @@ static void game_seed(struct game *g, const vec3d_t *dim) {
     g->e[j].pos.x = randval(0.0, dim->x);
     g->e[j].pos.y = randval(0.0, dim->y);
     g->e[j].pos.z = 0.0;
+    g->e[j].heading = randval(0.0, 2.0 * M_PI);
   }
 
   for (size_t i = 0; i < g->n; i++) {
@@ -85,7 +88,7 @@ int main(int argc, char **argv) {
   size_t z_height = 100;
 
   int c;
-  while ((c = getopt(argc, argv, ":hx:y:z:s:m:n:l:")) != -1) {
+  while ((c = getopt(argc, argv, ":hx:y:z:s:m:n:l:r")) != -1) {
     switch (c) {
     case 'h':
       puts(HELP_TEXT);
@@ -111,6 +114,9 @@ int main(int argc, char **argv) {
       break;
     case 'n':
       game_x.n = strtoul(optarg, NULL, 10);
+      break;
+    case 'r':
+      random_walk = true;
       break;
     case '?':
       fprintf(stderr, "Unknown option -%c\n", optopt);
@@ -415,6 +421,18 @@ static void game_u(void *x, double dt) {
     game->p[i].vel.x = -V_P * (l_xi / costate_mag);
     game->p[i].vel.y = -V_P * (l_yi / costate_mag);
     game->p[i].vel.z = -V_P * (l_zi / costate_mag);
+  }
+
+  /* If the evaders are configured to have a random walk instead of following
+   * their optimal controls, do that instead of co-state computation.
+   */
+
+  if (random_walk) {
+    for (size_t j = 0; j < game->m; j++) {
+      game->e[j].heading += RANDWALK_ERRATICISIM * randval(-1.0, 1.0);
+    }
+
+    return;
   }
 
   /* Evader co-states */

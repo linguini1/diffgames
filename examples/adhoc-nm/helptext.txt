@@ -24,6 +24,7 @@ OPTIONS:
     -l <loss>   Maximum allowable loss for a connection in dB. Default 45.0.
     -m <m>      Number of evaders m > 0. Default 1.
     -n <n>      Number of evaders n > 0. Default 1.
+    -r          Enables random walk motion for evaders.
 
 CONTROLS:
     This game is visualized using SDL2 and accepts keyboard input.
