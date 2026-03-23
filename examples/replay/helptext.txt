@@ -1,0 +1,37 @@
+Replayed Ad-hoc Aerial Game
+
+DESCRIPTION:
+    Replay the simulation of an ad-hoc aerial game from a file which records
+    positions over time.
+
+    File records should be in the format of:
+
+    n,m
+    0,x,y,z
+    1,x,y,z
+    ...
+
+    Where 'n' is the number of pursuers and 'm' is the number of evaders. Each
+    record begins with the agent's ID followed by their X, Y, Z position as
+    floating point numbers. IDs should be < n for pursuers and >= n for evaders.
+
+USAGE:
+    replay [OPTIONS]
+
+OPTIONS:
+    -h          Display this help text.
+    -x <width>  Window width in pixels. Default is half screen width.
+    -y <height> Window height in pixels. Default is half screen height.
+    -s <scale>  Rendering scale. Default 5.
+    -f <file>   File to replay from. Required.
+    -t <step>   Time step (frame) duration in microseconds. Default 0.
+    -e          When this flag is passed, the program will exit on game over.
+    -l <limit>  Path loss limit for severed connection in dB. Default 75.0.
+
+CONTROLS:
+    This game is visualized using SDL2 and accepts keyboard input.
+
+    q           Quit the game.
+    n           Show network connections.
+    Esc         Quit the game.
+    Space       Re-start the game.
