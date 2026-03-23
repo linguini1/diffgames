@@ -26,7 +26,8 @@ OPTIONS:
     -f <file>   File to replay from. Required.
     -t <step>   Time step (frame) duration in microseconds. Default 0.
     -e          When this flag is passed, the program will exit on game over.
-    -l <limit>  Path loss limit for severed connection in dB. Default 75.0.
+    -l <limit>  Path loss limit for severed connection in dB. Overrides the
+                value in the simulation file.
 
 CONTROLS:
     This game is visualized using SDL2 and accepts keyboard input.

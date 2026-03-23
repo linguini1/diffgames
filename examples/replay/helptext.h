@@ -12,7 +12,8 @@
 "  -f <file>   File to replay from. Required.\n    -t <step>   Time step (fra" \
 "me) duration in microseconds. Default 0.\n    -e          When this flag is " \
 "passed, the program will exit on game over.\n    -l <limit>  Path loss limit" \
-" for severed connection in dB. Default 75.0.\n\nCONTROLS:\n    This game is " \
-"visualized using SDL2 and accepts keyboard input.\n\n    q           Quit th" \
-"e game.\n    n           Show network connections.\n    Esc         Quit the" \
-" game.\n    Space       Re-start the game.\n"
+" for severed connection in dB. Overrides the\n                value in the s" \
+"imulation file.\n\nCONTROLS:\n    This game is visualized using SDL2 and acc" \
+"epts keyboard input.\n\n    q           Quit the game.\n    n           Show" \
+" network connections.\n    Esc         Quit the game.\n    Space       Re-st" \
+"art the game.\n"

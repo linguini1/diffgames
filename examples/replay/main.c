@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
   bool game_over = false;
   bool exit_on_completion = false;
   bool show_network = false;
-  double ploss_limit = 75.0;
+  double ploss_limit = NAN;
 
   int c;
   while ((c = getopt(argc, argv, ":hx:y:s:f:t:l:e")) != -1) {
@@ -96,13 +96,18 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  /* Get N and M TODO: no error handling */
+  /* Get n, m and loss threshold. TODO: no error handling */
 
   fgets(buf, sizeof(buf), file);
   char *token = strtok(buf, ",");
   n = strtoul(token, NULL, 10);
   token = strtok(NULL, ",");
   m = strtoul(token, NULL, 10);
+
+  if (isnan(ploss_limit)) {
+    token = strtok(NULL, ",");
+    ploss_limit = strtold(token, NULL);
+  }
 
   if (n <= 0 || m <= 0) {
     fprintf(stderr, "Invalid premise, n or m is <= 0\n");
