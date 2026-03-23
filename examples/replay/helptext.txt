@@ -36,3 +36,4 @@ CONTROLS:
     n           Show network connections.
     Esc         Quit the game.
     Space       Re-start the game.
+    Scroll      Scrolling the mouse wheel adjusts the scale of the render.

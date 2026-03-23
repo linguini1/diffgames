@@ -16,4 +16,5 @@
 "imulation file.\n\nCONTROLS:\n    This game is visualized using SDL2 and acc" \
 "epts keyboard input.\n\n    q           Quit the game.\n    n           Show" \
 " network connections.\n    Esc         Quit the game.\n    Space       Re-st" \
-"art the game.\n"
+"art the game.\n    Scroll      Scrolling the mouse wheel adjusts the scale o" \
+"f the render.\n"

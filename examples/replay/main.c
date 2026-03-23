@@ -166,6 +166,10 @@ int main(int argc, char **argv) {
         running = false;
         break;
 
+      case SDL_MOUSEWHEEL:
+        scale += (float)(event.wheel.y / 5.0);
+        break;
+
       case SDL_KEYDOWN:
         switch (event.key.keysym.sym) {
 
