@@ -12,6 +12,7 @@
 
 #include "3dtools.h"
 #include "helptext.h"
+#include "render.h"
 #include "utils.h"
 
 const char WINDOW_NAME[] = "Replay";
@@ -32,20 +33,28 @@ static double ploss(const agent_t *a1, const agent_t *a2) {
 static int parse_record(char *buf, agent_t *agent);
 
 int main(int argc, char **argv) {
+  double ploss_limit = NAN;
   double scale = 5.0;
   SDL_DisplayMode dm = {0};
   SDL_DisplayMode tempdm;
   SDL_Event event;
-  bool running = true;
   char *filename = NULL;
   char buf[BUFSIZ];
   size_t n = 0;
   size_t m = 0;
   size_t timestep = 0;
+  bool running = true;
   bool game_over = false;
   bool exit_on_completion = false;
   bool show_network = false;
-  double ploss_limit = NAN;
+  bool mouse_pressed = false;
+  vec2d_t mouse_start;
+  vec2d_t mouse_end;
+  vec2d_t mouse_offset = VEC2D_SINIT(0.0, 0.0);
+  vec2d_t perm_offset = VEC2D_SINIT(0.0, 0.0);
+  vec2d_t comb_offset;
+  int mouse_x;
+  int mouse_y;
 
   int c;
   while ((c = getopt(argc, argv, ":hx:y:s:f:t:l:e")) != -1) {
@@ -166,8 +175,29 @@ int main(int argc, char **argv) {
         running = false;
         break;
 
+        /* Scaling the render */
+
       case SDL_MOUSEWHEEL:
         scale += (float)(event.wheel.y / 5.0);
+        break;
+
+      case SDL_MOUSEBUTTONDOWN:
+        if (!mouse_pressed) {
+          SDL_GetMouseState(&mouse_x, &mouse_y);
+          vec2d_init(&mouse_start, mouse_x, mouse_y);
+          vec2d_init(&mouse_end, mouse_x, mouse_y);
+        }
+        mouse_pressed = true;
+        break;
+
+      case SDL_MOUSEBUTTONUP:
+        /* Store the current mouse offset as the permanent offset, reset the
+         * mouse offset for next time.
+         */
+
+        perm_offset = comb_offset;
+        vec2d_init(&mouse_offset, 0, 0);
+        mouse_pressed = false;
         break;
 
       case SDL_KEYDOWN:
@@ -199,6 +229,18 @@ int main(int argc, char **argv) {
       }
     }
 
+    /* Modify offset of the map using user set mouse location */
+
+    if (mouse_pressed) {
+      SDL_GetMouseState(&mouse_x, &mouse_y);
+      vec2d_init(&mouse_end, mouse_x, mouse_y);
+      vec2d_sub(&mouse_end, &mouse_start, &mouse_offset); /* Update offset */
+    }
+
+    /* Compute current offset */
+
+    vec2d_add(&perm_offset, &mouse_offset, &comb_offset);
+
     /* Populate agents with current time step */
 
     for (size_t i = 0; i < n + m && !game_over; i++) {
@@ -220,15 +262,26 @@ int main(int argc, char **argv) {
 
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
 
+    vec2d_t ai;
+    vec2d_t aj;
+
     for (size_t i = 0; i < n && show_network; i++) {
       for (size_t j = 0; j < n + m; j++) {
         if (i == j) continue; /* No self-self considerations */
 
+        /* Modify render points */
+
+        vec2d_add(&agents[i].pos, &comb_offset, &ai);
+        vec2d_add(&agents[j].pos, &comb_offset, &aj);
+        ai.x /= scale;
+        ai.y /= scale;
+        aj.x /= scale;
+        aj.y /= scale;
+
         /* Calculate path loss and draw a line if within limit */
+
         if (ploss(&agents[i], &agents[j]) <= ploss_limit) {
-          SDL_RenderDrawLine(renderer, agents[i].pos.x / scale,
-                             agents[i].pos.y / scale, agents[j].pos.x / scale,
-                             agents[j].pos.y / scale);
+          render_line(renderer, &ai, &aj);
         }
       }
     }
@@ -238,8 +291,10 @@ int main(int argc, char **argv) {
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
 
     for (size_t i = 0; i < n; i++) {
-      SDL_RenderDrawPoint(renderer, agents[i].pos.x / scale,
-                          agents[i].pos.y / scale);
+      vec2d_add(&agents[i].pos, &comb_offset, &ai);
+      ai.x /= scale;
+      ai.y /= scale;
+      render_vec2d(renderer, &ai);
     }
 
     /* Draw evaders in green */
@@ -247,8 +302,10 @@ int main(int argc, char **argv) {
     SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
 
     for (size_t j = n; j < n + m; j++) {
-      SDL_RenderDrawPoint(renderer, agents[j].pos.x / scale,
-                          agents[j].pos.y / scale);
+      vec2d_add(&agents[j].pos, &comb_offset, &aj);
+      aj.x /= scale;
+      aj.y /= scale;
+      render_vec2d(renderer, &aj);
     }
 
     /* Show what was drawn */
@@ -263,11 +320,19 @@ int main(int argc, char **argv) {
       for (size_t j = 0; j < n + m; j++) {
         if (i == j) continue; /* No self-self considerations */
 
+        /* Modify render points */
+
+        vec2d_add(&agents[i].pos, &comb_offset, &ai);
+        vec2d_add(&agents[j].pos, &comb_offset, &aj);
+        ai.x /= scale;
+        ai.y /= scale;
+        aj.x /= scale;
+        aj.y /= scale;
+
         /* Calculate path loss and draw a line if within limit */
+
         if (ploss(&agents[i], &agents[j]) <= ploss_limit) {
-          SDL_RenderDrawLine(renderer, agents[i].pos.x / scale,
-                             agents[i].pos.y / scale, agents[j].pos.x / scale,
-                             agents[j].pos.y / scale);
+          render_line(renderer, &ai, &aj);
         }
       }
     }
