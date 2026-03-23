@@ -178,7 +178,8 @@ int main(int argc, char **argv) {
         /* Scaling the render */
 
       case SDL_MOUSEWHEEL:
-        scale += (float)(event.wheel.y / 5.0);
+        scale -= (float)(event.wheel.y / 5.0);
+        if (scale <= 0.1) scale = 0.1; /* Trim */
         break;
 
       case SDL_MOUSEBUTTONDOWN:
