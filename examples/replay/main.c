@@ -12,7 +12,6 @@
 
 #include "3dtools.h"
 #include "helptext.h"
-#include "render.h"
 #include "utils.h"
 
 const char WINDOW_NAME[] = "Replay";
@@ -205,9 +204,6 @@ int main(int argc, char **argv) {
         break;
       }
       parse_record(buf, &agents[i]);
-      agents[i].pos.x /= scale;
-      agents[i].pos.y /= scale;
-      agents[i].pos.z /= scale;
     }
 
     /* Clear screen to black with semi-transparency so trail appears */
@@ -226,7 +222,9 @@ int main(int argc, char **argv) {
 
         /* Calculate path loss and draw a line if within limit */
         if (ploss(&agents[i], &agents[j]) <= ploss_limit) {
-          render_line(renderer, &agents[i].pos, &agents[j].pos);
+          SDL_RenderDrawLine(renderer, agents[i].pos.x / scale,
+                             agents[i].pos.y / scale, agents[j].pos.x / scale,
+                             agents[j].pos.y / scale);
         }
       }
     }
@@ -236,7 +234,8 @@ int main(int argc, char **argv) {
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
 
     for (size_t i = 0; i < n; i++) {
-      render_vec2d(renderer, &agents[i].pos);
+      SDL_RenderDrawPoint(renderer, agents[i].pos.x / scale,
+                          agents[i].pos.y / scale);
     }
 
     /* Draw evaders in green */
@@ -244,7 +243,8 @@ int main(int argc, char **argv) {
     SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
 
     for (size_t j = n; j < n + m; j++) {
-      render_vec2d(renderer, &agents[j].pos);
+      SDL_RenderDrawPoint(renderer, agents[j].pos.x / scale,
+                          agents[j].pos.y / scale);
     }
 
     /* Show what was drawn */
@@ -261,7 +261,9 @@ int main(int argc, char **argv) {
 
         /* Calculate path loss and draw a line if within limit */
         if (ploss(&agents[i], &agents[j]) <= ploss_limit) {
-          render_line(renderer, &agents[i].pos, &agents[j].pos);
+          SDL_RenderDrawLine(renderer, agents[i].pos.x / scale,
+                             agents[i].pos.y / scale, agents[j].pos.x / scale,
+                             agents[j].pos.y / scale);
         }
       }
     }
