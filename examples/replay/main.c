@@ -11,6 +11,8 @@
 #include <SDL2/SDL.h>
 
 #include "3dtools.h"
+#include "SDL_render.h"
+#include "SDL_surface.h"
 #include "helptext.h"
 #include "render.h"
 #include "utils.h"
@@ -156,11 +158,16 @@ int main(int argc, char **argv) {
       SDL_CreateWindow(WINDOW_NAME, SDL_WINDOWPOS_UNDEFINED,
                        SDL_WINDOWPOS_UNDEFINED, dm.w, dm.h, SDL_WINDOW_OPENGL);
 
-  /* Create renderer */
+  /* Create main window renderer */
 
   SDL_Renderer *renderer = SDL_CreateRenderer(
       window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
   SDL_RenderSetScale(renderer, scale, scale);
+
+  /* Create texture for particle trailing effect */
+
+  SDL_Texture *agent_txtr = SDL_CreateTexture(
+      renderer, tempdm.format, SDL_TEXTUREACCESS_TARGET, dm.w, dm.h);
 
   /* Simulation loop */
 
@@ -257,41 +264,17 @@ int main(int argc, char **argv) {
       parse_record(buf, &agents[i]);
     }
 
-    /* Clear screen to black with semi-transparency so trail appears */
-
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 10);
-    SDL_RenderFillRect(renderer, &fullscreen);
-
-    /* Draw graph connections */
-
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-
     vec2d_t ai;
     vec2d_t aj;
 
-    for (size_t i = 0; i < n && show_network; i++) {
-      for (size_t j = 0; j < n + m; j++) {
-        if (i == j) continue; /* No self-self considerations */
+    /* Clear agent texture to black with semi-transparency so trail appears */
 
-        /* Modify render points */
+    SDL_SetRenderTarget(renderer, agent_txtr);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 10);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_RenderFillRect(renderer, &fullscreen);
 
-        vec2d_add(&agents[i].pos, &comb_offset, &ai);
-        vec2d_add(&agents[j].pos, &comb_offset, &aj);
-        ai.x /= scale;
-        ai.y /= scale;
-        aj.x /= scale;
-        aj.y /= scale;
-
-        /* Calculate path loss and draw a line if within limit */
-
-        if (ploss(&agents[i], &agents[j]) <= ploss_limit) {
-          render_line(renderer, &ai, &aj);
-        }
-      }
-    }
-
-    /* Draw pursuers in red */
+    /* Draw pursuers in red on agent texture */
 
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
 
@@ -302,7 +285,7 @@ int main(int argc, char **argv) {
       render_vec2d(renderer, &ai);
     }
 
-    /* Draw evaders in green */
+    /* Draw evaders in green on agent texture */
 
     SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
 
@@ -313,14 +296,21 @@ int main(int argc, char **argv) {
       render_vec2d(renderer, &aj);
     }
 
-    /* Show what was drawn */
+    SDL_SetRenderTarget(renderer, NULL); /* Switch back to window */
 
-    SDL_RenderPresent(renderer);
+    /* Clear window renderer entirely with black */
 
-    /* Clear graph connections */
-
+    SDL_SetRenderTarget(renderer, NULL);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+    SDL_RenderClear(renderer);
 
+    /* Copy over agent render on top of the graph render */
+
+    SDL_RenderCopy(renderer, agent_txtr, NULL, &fullscreen);
+
+    /* Draw graph connections in white to the window renderer */
+
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
     for (size_t i = 0; i < n && show_network; i++) {
       for (size_t j = 0; j < n + m; j++) {
         if (i == j) continue; /* No self-self considerations */
@@ -341,6 +331,10 @@ int main(int argc, char **argv) {
         }
       }
     }
+
+    /* Show what was drawn */
+
+    SDL_RenderPresent(renderer);
 
     /* Advance simulation until a capture occurs */
 
@@ -355,6 +349,7 @@ int main(int argc, char **argv) {
 
   fclose(file);
   free(agents);
+  SDL_DestroyTexture(agent_txtr);
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();
