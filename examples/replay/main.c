@@ -332,6 +332,10 @@ int main(int argc, char **argv) {
       }
     }
 
+    /* Draw scale for 100m */
+
+    SDL_RenderDrawLine(renderer, 3, 3, 3 + 100 / scale, 3);
+
     /* Show what was drawn */
 
     SDL_RenderPresent(renderer);
