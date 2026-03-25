@@ -34,6 +34,9 @@ CONTROLS:
 
     q           Quit the game.
     n           Show network connections.
+    p           Pause the game.
     Esc         Quit the game.
     Space       Re-start the game.
-    Scroll      Scrolling the mouse wheel adjusts the scale of the render.
+    
+    Scrolling the mouse wheel adjusts the scale of the render. Click and drag to
+    move the view.

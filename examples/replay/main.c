@@ -48,6 +48,7 @@ int main(int argc, char **argv) {
   bool exit_on_completion = false;
   bool show_network = false;
   bool mouse_pressed = false;
+  bool paused = false;
   vec2d_t mouse_start;
   vec2d_t mouse_end;
   vec2d_t mouse_offset = VEC2D_SINIT(0.0, 0.0);
@@ -208,6 +209,9 @@ int main(int argc, char **argv) {
         case SDLK_q:
           running = false;
           break;
+        case SDLK_p:
+          paused = !paused;
+          break;
         case SDLK_n:
           show_network = !show_network;
           break;
@@ -244,7 +248,7 @@ int main(int argc, char **argv) {
 
     /* Populate agents with current time step */
 
-    for (size_t i = 0; i < n + m && !game_over; i++) {
+    for (size_t i = 0; i < n + m && !game_over && !paused; i++) {
       fgets(buf, sizeof(buf), file);
       if (feof(file)) {
         game_over = true;
