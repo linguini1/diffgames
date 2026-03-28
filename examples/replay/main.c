@@ -30,6 +30,11 @@ static double ploss(const agent_t *a1, const agent_t *a2) {
   return 20.0 * log10((4 * M_PI / LAMBDA) * vec3d_dist_r(&a1->pos, &a2->pos));
 }
 
+void render_agents(SDL_Renderer *renderer, agent_t *agents, size_t n, size_t m,
+                   vec2d_t *screen_offset, double scale);
+void render_graph(SDL_Renderer *renderer, agent_t *agents, size_t n, size_t m,
+                  vec2d_t *screen_offset, double scale, double ploss_limit);
+
 static int parse_record(char *buf, agent_t *agent);
 
 int main(int argc, char **argv) {
@@ -262,77 +267,43 @@ int main(int argc, char **argv) {
       parse_record(buf, &agents[i]);
     }
 
-    vec2d_t ai;
-    vec2d_t aj;
+    if (!paused) {
 
-    /* Clear agent texture to black with semi-transparency so trail appears */
+      /* Render agents with trails */
 
-    SDL_SetRenderTarget(renderer, agent_txtr);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 10);
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_RenderFillRect(renderer, &fullscreen);
+      SDL_SetRenderTarget(renderer, agent_txtr); /* Switch to agent texture */
 
-    /* Draw pursuers in red on agent texture */
+      SDL_SetRenderDrawColor(renderer, 0, 0, 0, 10);
+      SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+      SDL_RenderFillRect(renderer, &fullscreen);
 
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
+      render_agents(renderer, agents, n, m, &comb_offset, scale);
+      SDL_SetRenderTarget(renderer, NULL); /* Switch back to window */
 
-    for (size_t i = 0; i < n; i++) {
-      vec2d_add(&agents[i].pos, &comb_offset, &ai);
-      ai.x /= scale;
-      ai.y /= scale;
-      render_vec2d(renderer, &ai);
-    }
+      /* Clear window renderer entirely with black */
 
-    /* Draw evaders in green on agent texture */
+      SDL_SetRenderTarget(renderer, NULL);
+      SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+      SDL_RenderClear(renderer);
 
-    SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
+      /* Copy over agent render on top of the graph render */
 
-    for (size_t j = n; j < n + m; j++) {
-      vec2d_add(&agents[j].pos, &comb_offset, &aj);
-      aj.x /= scale;
-      aj.y /= scale;
-      render_vec2d(renderer, &aj);
-    }
+      SDL_RenderCopy(renderer, agent_txtr, NULL, &fullscreen);
 
-    SDL_SetRenderTarget(renderer, NULL); /* Switch back to window */
+      /* Render network graph if selected to show the network */
 
-    /* Clear window renderer entirely with black */
+      if (show_network) {
+        render_graph(renderer, agents, n, m, &comb_offset, scale, ploss_limit);
 
-    SDL_SetRenderTarget(renderer, NULL);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-    SDL_RenderClear(renderer);
-
-    /* Copy over agent render on top of the graph render */
-
-    SDL_RenderCopy(renderer, agent_txtr, NULL, &fullscreen);
-
-    /* Draw graph connections in white to the window renderer */
-
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-    for (size_t i = 0; i < n && show_network; i++) {
-      for (size_t j = 0; j < n + m; j++) {
-        if (i == j) continue; /* No self-self considerations */
-
-        /* Modify render points */
-
-        vec2d_add(&agents[i].pos, &comb_offset, &ai);
-        vec2d_add(&agents[j].pos, &comb_offset, &aj);
-        ai.x /= scale;
-        ai.y /= scale;
-        aj.x /= scale;
-        aj.y /= scale;
-
-        /* Calculate path loss and draw a line if within limit */
-
-        if (ploss(&agents[i], &agents[j]) <= ploss_limit) {
-          render_line(renderer, &ai, &aj);
-        }
+        /* We also draw just the most recent agent positions over top */
+        render_agents(renderer, agents, n, m, &comb_offset, scale);
       }
+
+      /* Draw scale for 100m */
+
+      SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+      SDL_RenderDrawLine(renderer, 3, 3, 3 + 100 / scale, 3);
     }
-
-    /* Draw scale for 100m */
-
-    SDL_RenderDrawLine(renderer, 3, 3, 3 + 100 / scale, 3);
 
     /* Show what was drawn */
 
@@ -374,4 +345,62 @@ static int parse_record(char *buf, agent_t *agent) {
   }
 
   return 0;
+}
+
+void render_agents(SDL_Renderer *renderer, agent_t *agents, size_t n, size_t m,
+                   vec2d_t *screen_offset, double scale) {
+  vec2d_t ai;
+  vec2d_t aj;
+
+  /* Draw pursuers in red on agent texture */
+
+  SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
+
+  for (size_t i = 0; i < n; i++) {
+    vec2d_add(&agents[i].pos, screen_offset, &ai);
+    ai.x /= scale;
+    ai.y /= scale;
+    render_vec2d(renderer, &ai);
+  }
+
+  /* Draw evaders in green on agent texture */
+
+  SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
+
+  for (size_t j = n; j < n + m; j++) {
+    vec2d_add(&agents[j].pos, screen_offset, &aj);
+    aj.x /= scale;
+    aj.y /= scale;
+    render_vec2d(renderer, &aj);
+  }
+}
+
+void render_graph(SDL_Renderer *renderer, agent_t *agents, size_t n, size_t m,
+                  vec2d_t *screen_offset, double scale, double ploss_limit) {
+  vec2d_t ai;
+  vec2d_t aj;
+
+  /* Draw graph connections in white to the window renderer */
+
+  SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+  for (size_t i = 0; i < n; i++) {
+    for (size_t j = 0; j < n + m; j++) {
+      if (i == j) continue; /* No self-self considerations */
+
+      /* Modify render points */
+
+      vec2d_add(&agents[i].pos, screen_offset, &ai);
+      vec2d_add(&agents[j].pos, screen_offset, &aj);
+      ai.x /= scale;
+      ai.y /= scale;
+      aj.x /= scale;
+      aj.y /= scale;
+
+      /* Calculate path loss and draw a line if within limit */
+
+      if (ploss(&agents[i], &agents[j]) <= ploss_limit) {
+        render_line(renderer, &ai, &aj);
+      }
+    }
+  }
 }
