@@ -11,8 +11,6 @@
 #include <SDL2/SDL.h>
 
 #include "3dtools.h"
-#include "SDL_render.h"
-#include "SDL_surface.h"
 #include "helptext.h"
 #include "render.h"
 #include "utils.h"
