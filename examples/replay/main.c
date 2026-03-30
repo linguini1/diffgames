@@ -230,6 +230,9 @@ int main(int argc, char **argv) {
           fgets(buf, sizeof(buf), file); /* Skip headers */
           game_over = false;
           SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+          SDL_SetRenderTarget(renderer, agent_txtr); /* Clear agents */
+          SDL_RenderClear(renderer);
+          SDL_SetRenderTarget(renderer, NULL); /* Clear window */
           SDL_RenderClear(renderer);
           SDL_RenderPresent(renderer);
           break;
