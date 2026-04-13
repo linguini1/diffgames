@@ -18,6 +18,7 @@
 const char WINDOW_NAME[] = "Replay";
 
 #define LAMBDA (0.32764203)
+#define EVADER_RADIUS (300.0)
 
 /* Represents a single agent with a position in space */
 
@@ -293,6 +294,18 @@ int main(int argc, char **argv) {
 
       SDL_RenderCopy(renderer, agent_txtr, NULL, &fullscreen);
 
+      /* Draw scale for 100m */
+
+      SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+      SDL_RenderDrawLine(renderer, 3, 3, 3 + 100 / scale, 3);
+
+      /* Draw the evader radius */
+
+      vec2d_t center = comb_offset;
+      center.x /= scale;
+      center.y /= scale;
+      render_circle(renderer, &center, EVADER_RADIUS / scale, 50);
+
       /* Render network graph if selected to show the network */
 
       if (show_network) {
@@ -301,11 +314,6 @@ int main(int argc, char **argv) {
         /* We also draw just the most recent agent positions over top */
         render_agents(renderer, agents, n, m, &comb_offset, scale);
       }
-
-      /* Draw scale for 100m */
-
-      SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-      SDL_RenderDrawLine(renderer, 3, 3, 3 + 100 / scale, 3);
     }
 
     /* Show what was drawn */
