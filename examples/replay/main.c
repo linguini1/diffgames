@@ -18,7 +18,6 @@
 const char WINDOW_NAME[] = "Replay";
 
 #define LAMBDA (0.32764203)
-#define EVADER_RADIUS (300.0)
 
 /* Represents a single agent with a position in space */
 
@@ -41,6 +40,7 @@ static int parse_record(char *buf, agent_t *agent);
 int main(int argc, char **argv) {
   double ploss_limit = NAN;
   double scale = 5.0;
+  double r_max = NAN;
   SDL_DisplayMode dm = {0};
   SDL_DisplayMode tempdm;
   SDL_Event event;
@@ -111,17 +111,38 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  /* Get n, m and loss threshold. TODO: no error handling */
+  /* Get simulation parameters needed for rendering from the simulation file:
+   * n, m loss threshold (dB), bounded play region
+   * TODO: no error handling,
+   */
 
   fgets(buf, sizeof(buf), file);
+
   char *token = strtok(buf, ",");
+  if (token == NULL) {
+    fprintf(stderr, "Expected token for 'n', got nothing.\n");
+    return EXIT_FAILURE;
+  }
   n = strtoul(token, NULL, 10);
+
   token = strtok(NULL, ",");
+  if (token == NULL) {
+    fprintf(stderr, "Expected token for 'm', got nothing.\n");
+    return EXIT_FAILURE;
+  }
   m = strtoul(token, NULL, 10);
 
-  if (isnan(ploss_limit)) {
-    token = strtok(NULL, ",");
+  token = strtok(NULL, ",");
+  if (isnan(ploss_limit) && token != NULL) {
     ploss_limit = strtold(token, NULL);
+  }
+
+  token = strtok(NULL, ",");
+  if (token != NULL) {
+    r_max = strtold(token, NULL);
+  } else {
+    fprintf(stderr,
+            "Warning: No r_max for this simulation, skipping render.\n");
   }
 
   if (n <= 0 || m <= 0) {
@@ -299,12 +320,14 @@ int main(int argc, char **argv) {
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
       SDL_RenderDrawLine(renderer, 3, 3, 3 + 100 / scale, 3);
 
-      /* Draw the evader radius */
+      /* Draw the evader radius if this simulation has a bounded play region. */
 
-      vec2d_t center = comb_offset;
-      center.x /= scale;
-      center.y /= scale;
-      render_circle(renderer, &center, EVADER_RADIUS / scale, 50);
+      if (!isnan(r_max)) {
+        vec2d_t center = comb_offset;
+        center.x /= scale;
+        center.y /= scale;
+        render_circle(renderer, &center, r_max / scale, 50);
+      }
 
       /* Render network graph if selected to show the network */
 
