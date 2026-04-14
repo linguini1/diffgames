@@ -72,5 +72,5 @@ An example of a N pursuer, N evader differential game.
 Replay simulation records from my own formulation of a pursuit-evasion
 differential game that forms an ad-hoc aerial network.
 
-[Ad-hoc network
-game](https://raw.githubusercontent.com/linguini1/diffgames/main/docs/adhoc-bounded-game.mp4)
+<video src="https://raw.githubusercontent.com/linguini1/diffgames/main/docs/adhoc-bounded-game.mp4">
+</video>
