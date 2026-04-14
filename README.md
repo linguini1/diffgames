@@ -66,3 +66,10 @@ An example of a 2 pursuer, 2 evader differential game.
 An example of a N pursuer, N evader differential game.
 
 ![4P4E](./docs/4p4e.png)
+
+### Replay
+
+Replay simulation records from my own formulation of a pursuit-evasion
+differential game that forms an ad-hoc aerial network.
+
+![Ad-hoc game](./docs/adhoc-bounded-game.mp4)
