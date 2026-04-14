@@ -49,6 +49,13 @@ specific information about the example you're using, run the example with the
 ./bin/particle -h
 ```
 
+### Replay
+
+Replay simulation records from my own formulation of a pursuit-evasion
+differential game that forms an ad-hoc aerial network.
+
+https://github.com/user-attachments/assets/2f0f053d-0f8d-43e9-8db3-b8c1e575e25f
+
 ### Particle
 
 A particle which follows your mouse forever.
@@ -66,11 +73,3 @@ An example of a 2 pursuer, 2 evader differential game.
 An example of a N pursuer, N evader differential game.
 
 ![4P4E](./docs/4p4e.png)
-
-### Replay
-
-Replay simulation records from my own formulation of a pursuit-evasion
-differential game that forms an ad-hoc aerial network.
-
-<video src="https://raw.githubusercontent.com/linguini1/diffgames/main/docs/adhoc-bounded-game.mp4">
-</video>
