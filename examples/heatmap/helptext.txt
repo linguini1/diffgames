@@ -30,6 +30,7 @@ CONTROLS:
     a           Move selected UAV left.
     s           Move selected UAV down.
     d           Move selected UAV right.
+    c           Move UAVs to high scoring locations.
     Up          Select next UAV in the list.
     Down        Select previous UAV in the list.
     Esc         Quit the game.

@@ -36,13 +36,13 @@
 #define WINDOW_NAME "Network Connectivity Visualizer"
 
 #define FONT_PATH "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf"
-#define FONT_SIZE (12)
+#define FONT_SIZE (10)
 
 #define SELECT_RADIUS (4) /* m */
 #define SELECT_RES (20)
 
 #define LAMBDA (0.32764203)
-#define SIGMOID_K (2.0)
+#define SIGMOID_K (4.0)
 
 #define AGENT_SIZE (3.0) /* m^2 */
 #define UAV_VEL (3.0)    /* m / s */
@@ -273,7 +273,7 @@ static double determinant(math_obj_t *math) {
 static unsigned components(math_obj_t *math) {
   unsigned comp = 1;
   for (size_t i = 0; i < math->eigs->size; i++) {
-    if (gsl_vector_get(math->eigs, i) < 1e-9) {
+    if (gsl_vector_get(math->eigs, i) < 1e-3) {
       comp++;
     }
   }
@@ -331,14 +331,17 @@ static void draw_graph(SDL_Renderer *renderer, gamestate_t *game) {
   }
 }
 
-static void draw_obj_value(SDL_Renderer *renderer, TTF_Font *font,
-                           double value) {
+static void draw_stats(SDL_Renderer *renderer, TTF_Font *font,
+                       const gamestate_t *game, double value,
+                       unsigned components) {
   static const SDL_Color white = {0xff, 0xff, 0xff, SDL_ALPHA_OPAQUE};
-  static char text[32];
+  static char text[64];
 
-  snprintf(text, sizeof(text), "%.2lf", value);
+  snprintf(text, sizeof(text), "Objval: %.2lf\nComponents: %u", value,
+           components);
 
-  SDL_Surface *textsurface = TTF_RenderText_Solid(font, text, white);
+  SDL_Surface *textsurface =
+      TTF_RenderText_Solid_Wrapped(font, text, white, game->screen.x);
   SDL_Texture *message = SDL_CreateTextureFromSurface(renderer, textsurface);
   SDL_Rect textrect = {
       .x = 5,
@@ -356,10 +359,8 @@ static void draw_obj_value(SDL_Renderer *renderer, TTF_Font *font,
 static void draw_compute_heatmap(SDL_Renderer *renderer, math_obj_t *math,
                                  gamestate_t *game) {
   double obj_val;
-  double max_obj_val = pow(game->nagents, game->nagents - 1);
+  double max_obj_val = log10(pow(game->nagents, game->nagents - 1));
   unsigned pixel;
-
-  max_obj_val = math_get_obj_value(math, game);
 
   /* For each pixel in the background, determine the objective value at that
    * spot. Then, draw it with a colour corresponding to the value.
@@ -378,7 +379,7 @@ static void draw_compute_heatmap(SDL_Renderer *renderer, math_obj_t *math,
        */
 
       obj_val = math_get_obj_value(math, game);
-      pixel = (obj_val / (max_obj_val * 2)) * 255;
+      pixel = (log10(obj_val + 1.0) / max_obj_val) * 255;
       if (pixel > 255) pixel = 255;
       SDL_SetRenderDrawColor(renderer, pixel, 0, 0xff, SDL_ALPHA_OPAQUE);
       SDL_RenderDrawPoint(renderer, x, y);
@@ -405,6 +406,7 @@ int main(int argc, char **argv) {
   int mouse_y;
   int randseed = 0;
   double obj_value;
+  unsigned n_comp;
   bool seed_provided = false;
   bool running = true;
   bool show_network = false;
@@ -642,6 +644,7 @@ int main(int argc, char **argv) {
     /* Compute objective value */
 
     obj_value = math_get_obj_value(&math, &gamestate);
+    n_comp = components(&math);
 
     /* Process events */
 
@@ -694,7 +697,7 @@ int main(int argc, char **argv) {
 
     /* Draw objective value */
 
-    draw_obj_value(renderer, font, obj_value);
+    draw_stats(renderer, font, &gamestate, obj_value, n_comp);
 
     /* Show what was drawn */
 
