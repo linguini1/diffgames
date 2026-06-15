@@ -203,7 +203,18 @@ static void projmat_init(math_obj_t *math, const gamestate_t *game) {
     }
   }
 
-  /* TODO: Normalize this */
+  /* Normalize each row */
+
+  gsl_vector_view row;
+  double norm;
+
+  for (unsigned i = 0; i < math->proj->size1; i++) {
+    row = gsl_matrix_row(math->proj, i);
+    norm = gsl_blas_dnrm2(&row.vector);
+    if (norm > 0.0) {
+      gsl_vector_scale(&row.vector, 1.0 / norm);
+    }
+  }
 }
 
 static double sigm_thresh(double x, double t, double k) {
@@ -240,7 +251,7 @@ static void net_lpl_init(math_obj_t *math, const gamestate_t *game) {
   gsl_vector_view row;
   for (unsigned i = 0; i < game->nagents; i++) {
     row = gsl_matrix_row(math->net_lpl, i);
-    gsl_matrix_set(math->net_lpl, i, i, -gsl_vector_sum((gsl_vector *)&row));
+    gsl_matrix_set(math->net_lpl, i, i, -gsl_vector_sum(&row.vector));
   }
 }
 
@@ -345,8 +356,10 @@ static void draw_obj_value(SDL_Renderer *renderer, TTF_Font *font,
 static void draw_compute_heatmap(SDL_Renderer *renderer, math_obj_t *math,
                                  gamestate_t *game) {
   double obj_val;
-  double max_obj_val = game->nagents * (game->nagents - 1);
-  uint32_t pixel;
+  double max_obj_val = pow(game->nagents, game->nagents - 1);
+  unsigned pixel;
+
+  max_obj_val = math_get_obj_value(math, game);
 
   /* For each pixel in the background, determine the objective value at that
    * spot. Then, draw it with a colour corresponding to the value.
@@ -359,13 +372,15 @@ static void draw_compute_heatmap(SDL_Renderer *renderer, math_obj_t *math,
 
       /* Compute the values
        * TODO: this heat map sucks to look at
+       * TODO: we have to decide a better upper max on our objective value than
+       * 2x our current value or the theoretical max
+       * Maybe we need to do a logarithmic gradient instead of a linear one
        */
 
       obj_val = math_get_obj_value(math, game);
-      pixel = (obj_val / max_obj_val) * 0xffffffff;
-      SDL_SetRenderDrawColor(renderer, (pixel >> 16) & 0xff,
-                             (pixel >> 8) & 0xff, (pixel) & 0xff,
-                             SDL_ALPHA_OPAQUE);
+      pixel = (obj_val / (max_obj_val * 2)) * 255;
+      if (pixel > 255) pixel = 255;
+      SDL_SetRenderDrawColor(renderer, pixel, 0, 0xff, SDL_ALPHA_OPAQUE);
       SDL_RenderDrawPoint(renderer, x, y);
     }
   }
