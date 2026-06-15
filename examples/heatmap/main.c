@@ -387,6 +387,36 @@ static void draw_compute_heatmap(SDL_Renderer *renderer, math_obj_t *math,
   }
 }
 
+static void uav_pick_best_spot(math_obj_t *math, gamestate_t *game) {
+  double obj_val;
+  double best_val;
+  unsigned best_x = 0;
+  unsigned best_y = 0;
+
+  /* For each pixel in the background, determine the objective value at that
+   * spot. Then, draw it with a colour corresponding to the value.
+   */
+
+  for (unsigned x = 0; x < game->screen_scaled.x; x++) {
+    for (unsigned y = 0; y < game->screen_scaled.y; y++) {
+      game->agents[game->sel_idx].pos.x = x;
+      game->agents[game->sel_idx].pos.y = y;
+
+      /* Compute the values */
+
+      obj_val = math_get_obj_value(math, game);
+      if (obj_val > best_val) {
+        best_val = obj_val;
+        best_x = x;
+        best_y = y;
+      }
+    }
+  }
+
+  game->agents[game->sel_idx].pos.x = best_x;
+  game->agents[game->sel_idx].pos.y = best_y;
+}
+
 static void draw_selector_circle(SDL_Renderer *renderer, gamestate_t *game) {
   vec3d_t *pos = &game->agents[game->sel_idx].pos;
   render_circle(renderer, (vec2d_t *)pos, SELECT_RADIUS, SELECT_RES);
@@ -598,6 +628,11 @@ int main(int argc, char **argv) {
           break;
         case SDLK_h:
           draw_heatmap = !draw_heatmap;
+          break;
+        case SDLK_c:
+          /* Put the selected UAV in its best spot */
+
+          uav_pick_best_spot(&math, &gamestate);
           break;
         case SDLK_SPACE:
           game_init(&gamestate, &dm);
