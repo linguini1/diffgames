@@ -20,6 +20,8 @@ CFLAGS += -L $(SDL_PATH)/lib
 CFLAGS += -lmingw32 -lSDL2main -lSDL2
 else
 CFLAGS += $(shell sdl2-config --cflags --libs)
+CFLAGS += -lSDL2_ttf # SDL2 TTF library
+CFLAGS += -lgsl # GNU Scientific Library
 endif
 
 ### SOURCE FILES ###

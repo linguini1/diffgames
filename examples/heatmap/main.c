@@ -4,6 +4,9 @@
 
 #include <errno.h>
 #include <getopt.h>
+#include <gsl/gsl_matrix_double.h>
+#include <gsl/gsl_permutation.h>
+#include <gsl/gsl_vector_double.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -13,8 +16,15 @@
 #include <unistd.h>
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
+
+#include <gsl/gsl_blas.h>
+#include <gsl/gsl_eigen.h>
+#include <gsl/gsl_linalg.h>
+#include <gsl/gsl_matrix.h>
 
 #include "3dtools.h"
+#include "SDL_render.h"
 #include "helptext.h"
 #include "render.h"
 #include "utils.h"
@@ -25,10 +35,14 @@
 
 #define WINDOW_NAME "Network Connectivity Visualizer"
 
+#define FONT_PATH "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf"
+#define FONT_SIZE (12)
+
 #define SELECT_RADIUS (4) /* m */
 #define SELECT_RES (20)
 
 #define LAMBDA (0.32764203)
+#define SIGMOID_K (2.0)
 
 #define AGENT_SIZE (3.0) /* m^2 */
 #define UAV_VEL (3.0)    /* m / s */
@@ -51,10 +65,10 @@ typedef struct {
 } agent_t;
 
 typedef struct {
-  agent_t *uavs;         /* UAV array */
-  agent_t *ground;       /* Ground unit array */
+  agent_t *agents;       /* Agent array */
   unsigned n;            /* Number of UAVs */
   unsigned m;            /* Number of ground units */
+  unsigned nagents;      /* Number of agents for convenience */
   double ploss_limit;    /* Path loss limit */
   double z_uav;          /* Fixed z-coordinate of UAVs */
   unsigned sel_idx;      /* UAV selected to move with keyboard */
@@ -63,6 +77,15 @@ typedef struct {
   vec2d_t screen_scaled; /* Screen resolution scaled */
   vec2d_t center;        /* Screen center */
 } gamestate_t;
+
+typedef struct {
+  gsl_matrix *proj;      /* Projection matrix */
+  gsl_matrix *net_lpl;   /* Network Laplacian */
+  gsl_matrix *proj_lpl;  /* Projected Laplacian */
+  gsl_matrix *_proj_int; /* Intermediate matrix for projecting net lapl */
+  gsl_eigen_symm_workspace *eigw;
+  gsl_vector *eigs;
+} math_obj_t;
 
 enum dir_e {
   MOVE_UP,
@@ -75,54 +98,25 @@ enum dir_e {
  * Private Functions
  ****************************************************************************/
 
-static double ploss(const agent_t *a1, const agent_t *a2) {
-  return 20.0 * log10((4 * M_PI / LAMBDA) * vec3d_dist_r(&a1->pos, &a2->pos));
-}
-
-static void draw_agents(SDL_Renderer *renderer, agent_t *agents, unsigned n) {
-  for (unsigned i = 0; i < n; i++) {
-    SDL_Rect agentbox = {
-        .x = agents[i].pos.x - (AGENT_SIZE / 2),
-        .y = agents[i].pos.y - (AGENT_SIZE / 2),
-        .w = AGENT_SIZE,
-        .h = AGENT_SIZE,
-    };
-    SDL_RenderFillRect(renderer, &agentbox);
-  }
-}
-
-static void draw_graph(SDL_Renderer *renderer, gamestate_t *game) {
-
-  /* Inter-UAV connections */
-
-  for (unsigned i = 0; i < game->n; i++) {
-    for (unsigned j = 0; j < game->n; j++) {
-      if (i == j) continue;
-
-      if (ploss(&game->uavs[i], &game->uavs[j]) < game->ploss_limit) {
-        render_line(renderer, &game->uavs[i].pos, &game->uavs[j].pos);
-      }
+static void debug_print_matrix(gsl_matrix *mat) {
+  for (size_t i = 0; i < mat->size1; i++) {
+    for (size_t j = 0; j < mat->size2; j++) {
+      printf("%.2lf  ", gsl_matrix_get(mat, i, j));
     }
-  }
-
-  /* UAV-ground connections */
-
-  for (unsigned i = 0; i < game->n; i++) {
-    for (unsigned j = 0; j < game->m; j++) {
-      if (ploss(&game->uavs[i], &game->ground[j]) < game->ploss_limit) {
-        render_line(renderer, &game->uavs[i].pos, &game->ground[j].pos);
-      }
-    }
+    printf("\n");
   }
 }
 
-static void draw_selector_circle(SDL_Renderer *renderer, gamestate_t *game) {
-  vec3d_t *pos = &game->uavs[game->sel_idx].pos;
-  render_circle(renderer, (vec2d_t *)pos, SELECT_RADIUS, SELECT_RES);
+static double ploss_d(double distance) {
+  return 20.0 * log10((4 * M_PI / LAMBDA) * distance);
+}
+
+static double ploss(const vec3d_t *p1, const vec3d_t *p2) {
+  return ploss_d(vec3d_dist_r(p1, p2));
 }
 
 static void game_uav_move(gamestate_t *game, enum dir_e dir) {
-  agent_t *uav = &game->uavs[game->sel_idx];
+  agent_t *uav = &game->agents[game->sel_idx];
 
   /* Move but allow blocked movement by borders */
 
@@ -148,19 +142,19 @@ static void game_uav_move(gamestate_t *game, enum dir_e dir) {
 
 static void game_uav_teleport(gamestate_t *game, double x, double y) {
   if (x > game->screen_scaled.x) {
-    game->uavs[game->sel_idx].pos.x = game->screen_scaled.x;
+    game->agents[game->sel_idx].pos.x = game->screen_scaled.x;
   } else if (x < 0.0) {
-    game->uavs[game->sel_idx].pos.x = 0.0;
+    game->agents[game->sel_idx].pos.x = 0.0;
   } else {
-    game->uavs[game->sel_idx].pos.x = x;
+    game->agents[game->sel_idx].pos.x = x;
   }
 
   if (y > game->screen_scaled.y) {
-    game->uavs[game->sel_idx].pos.y = game->screen_scaled.y;
+    game->agents[game->sel_idx].pos.y = game->screen_scaled.y;
   } else if (y < 0.0) {
-    game->uavs[game->sel_idx].pos.y = 0.0;
+    game->agents[game->sel_idx].pos.y = 0.0;
   } else {
-    game->uavs[game->sel_idx].pos.y = y;
+    game->agents[game->sel_idx].pos.y = y;
   }
 }
 
@@ -180,20 +174,206 @@ static void game_init(gamestate_t *game, SDL_DisplayMode *screen) {
    */
 
   for (unsigned i = 0; i < game->n; i++) {
-    game->uavs[i].pos.x = randval(0.5 * game->center.x, 1.5 * game->center.x);
-    game->uavs[i].pos.y = randval(0.5 * game->center.y, 1.5 * game->center.y);
-    game->uavs[i].pos.z = game->z_uav;
+    game->agents[i].pos.x = randval(0.5 * game->center.x, 1.5 * game->center.x);
+    game->agents[i].pos.y = randval(0.5 * game->center.y, 1.5 * game->center.y);
+    game->agents[i].pos.z = game->z_uav;
   }
 
-  for (unsigned i = 0; i < game->m; i++) {
-    game->ground[i].pos.x = randval(0.5 * game->center.x, 1.5 * game->center.x);
-    game->ground[i].pos.y = randval(0.5 * game->center.y, 1.5 * game->center.y);
-    game->ground[i].pos.z = 0;
+  for (unsigned i = game->n; i < game->n + game->m; i++) {
+    game->agents[i].pos.x = randval(0.5 * game->center.x, 1.5 * game->center.x);
+    game->agents[i].pos.y = randval(0.5 * game->center.y, 1.5 * game->center.y);
+    game->agents[i].pos.z = 0;
   }
 
   /* The first UAV is our selected UAV to move */
 
   game->sel_idx = 0;
+}
+
+static void projmat_init(math_obj_t *math, const gamestate_t *game) {
+  for (unsigned i = 0; i < game->nagents; i++) {
+    for (unsigned k = 0; k < game->nagents - 1; k++) {
+      if (i <= k) {
+        gsl_matrix_set(math->proj, i, k, 1.0);
+      } else if (i == k + 1) {
+        gsl_matrix_set(math->proj, i, k, -((double)k + 1.0));
+      } else if (i > k + 1) {
+        gsl_matrix_set(math->proj, i, k, 0.0);
+      }
+    }
+  }
+
+  /* TODO: Normalize this */
+}
+
+static double sigm_thresh(double x, double t, double k) {
+  return 1.0 / (1.0 + exp(-k * (t - x)));
+}
+
+static double corr_sigmoid(const vec3d_t *p1, const vec3d_t *p2, double thresh,
+                           double k) {
+  double corr = ploss_d(thresh);
+  double loss = ploss(p1, p2);
+  return sigm_thresh(loss, corr, k);
+}
+
+static void net_lpl_init(math_obj_t *math, const gamestate_t *game) {
+  bool both_evaders;
+
+  /* Populate all of the matrix elements */
+
+  for (unsigned i = 0; i < game->nagents; i++) {
+    for (unsigned j = 0; j < game->nagents; j++) {
+      both_evaders = i >= game->n && j >= game->n;
+      if (!both_evaders && i != j) {
+        gsl_matrix_set(math->net_lpl, i, j,
+                       -corr_sigmoid(&game->agents[i].pos, &game->agents[j].pos,
+                                     game->ploss_limit, SIGMOID_K));
+      } else {
+        gsl_matrix_set(math->net_lpl, i, j, 0.0);
+      }
+    }
+  }
+
+  /* Sum up the diagonals */
+
+  gsl_vector_view row;
+  for (unsigned i = 0; i < game->nagents; i++) {
+    row = gsl_matrix_row(math->net_lpl, i);
+    gsl_matrix_set(math->net_lpl, i, i, -gsl_vector_sum((gsl_vector *)&row));
+  }
+}
+
+static void project_net_lpl(math_obj_t *math) {
+  gsl_blas_dgemm(CblasTrans, CblasNoTrans, 1.0, math->proj, math->net_lpl, 0.0,
+                 math->_proj_int); /* P^T L */
+  gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.0, math->_proj_int, math->proj,
+                 0.0, math->proj_lpl); /* P^T L P */
+}
+
+static double determinant(math_obj_t *math) {
+  double det = 1.0;
+  for (size_t i = 0; i < math->eigs->size; i++) {
+    det *= gsl_vector_get(math->eigs, i);
+  }
+  return det;
+}
+
+static unsigned components(math_obj_t *math) {
+  unsigned comp = 1;
+  for (size_t i = 0; i < math->eigs->size; i++) {
+    if (gsl_vector_get(math->eigs, i) < 1e-9) {
+      comp++;
+    }
+  }
+  return comp;
+}
+
+static void math_init(math_obj_t *math, gamestate_t const *game) {
+  math->net_lpl = gsl_matrix_alloc(game->nagents, game->nagents);
+  math->proj = gsl_matrix_alloc(game->nagents, game->nagents - 1);
+  projmat_init(math, game); /* This never changes */
+  math->_proj_int = gsl_matrix_alloc(math->proj->size2, math->net_lpl->size1);
+  math->proj_lpl = gsl_matrix_alloc(game->nagents - 1, game->nagents - 1);
+  math->eigw = gsl_eigen_symm_alloc(math->proj_lpl->size1);
+  math->eigs = gsl_vector_alloc(math->proj_lpl->size1);
+}
+
+static void math_free(math_obj_t *math) {
+  gsl_matrix_free(math->net_lpl);
+  gsl_matrix_free(math->proj);
+  gsl_matrix_free(math->_proj_int);
+  gsl_matrix_free(math->proj_lpl);
+  gsl_vector_free(math->eigs);
+  gsl_eigen_symm_free(math->eigw);
+}
+
+static double math_get_obj_value(math_obj_t *math, const gamestate_t *game) {
+  net_lpl_init(math, game);
+  project_net_lpl(math);
+  gsl_eigen_symm(math->proj_lpl, math->eigs, math->eigw); /* Compute eigs */
+  return determinant(math);
+}
+
+static void draw_agents(SDL_Renderer *renderer, agent_t *agents, unsigned n) {
+  for (unsigned i = 0; i < n; i++) {
+    SDL_Rect agentbox = {
+        .x = agents[i].pos.x - (AGENT_SIZE / 2),
+        .y = agents[i].pos.y - (AGENT_SIZE / 2),
+        .w = AGENT_SIZE,
+        .h = AGENT_SIZE,
+    };
+    SDL_RenderFillRect(renderer, &agentbox);
+  }
+}
+
+static void draw_graph(SDL_Renderer *renderer, gamestate_t *game) {
+  for (unsigned i = 0; i < game->n; i++) {
+    for (unsigned j = 0; j < game->nagents; j++) {
+      if (i == j) continue; /* No same-agent consideration */
+
+      if (ploss(&game->agents[i].pos, &game->agents[j].pos) <
+          game->ploss_limit) {
+        render_line(renderer, &game->agents[i].pos, &game->agents[j].pos);
+      }
+    }
+  }
+}
+
+static void draw_obj_value(SDL_Renderer *renderer, TTF_Font *font,
+                           double value) {
+  static const SDL_Color white = {0xff, 0xff, 0xff, SDL_ALPHA_OPAQUE};
+  static char text[32];
+
+  snprintf(text, sizeof(text), "%.2lf", value);
+
+  SDL_Surface *textsurface = TTF_RenderText_Solid(font, text, white);
+  SDL_Texture *message = SDL_CreateTextureFromSurface(renderer, textsurface);
+  SDL_Rect textrect = {
+      .x = 5,
+      .y = 5,
+      .w = textsurface->w,
+      .h = textsurface->h,
+  };
+
+  SDL_RenderCopy(renderer, message, NULL, &textrect);
+
+  SDL_FreeSurface(textsurface);
+  SDL_DestroyTexture(message);
+}
+
+static void draw_compute_heatmap(SDL_Renderer *renderer, math_obj_t *math,
+                                 gamestate_t *game) {
+  double obj_val;
+  double max_obj_val = game->nagents * (game->nagents - 1);
+  uint32_t pixel;
+
+  /* For each pixel in the background, determine the objective value at that
+   * spot. Then, draw it with a colour corresponding to the value.
+   */
+
+  for (unsigned x = 0; x < game->screen_scaled.x; x++) {
+    for (unsigned y = 0; y < game->screen_scaled.y; y++) {
+      game->agents[game->sel_idx].pos.x = x;
+      game->agents[game->sel_idx].pos.y = y;
+
+      /* Compute the values
+       * TODO: this heat map sucks to look at
+       */
+
+      obj_val = math_get_obj_value(math, game);
+      pixel = (obj_val / max_obj_val) * 0xffffffff;
+      SDL_SetRenderDrawColor(renderer, (pixel >> 16) & 0xff,
+                             (pixel >> 8) & 0xff, (pixel) & 0xff,
+                             SDL_ALPHA_OPAQUE);
+      SDL_RenderDrawPoint(renderer, x, y);
+    }
+  }
+}
+
+static void draw_selector_circle(SDL_Renderer *renderer, gamestate_t *game) {
+  vec3d_t *pos = &game->agents[game->sel_idx].pos;
+  render_circle(renderer, (vec2d_t *)pos, SELECT_RADIUS, SELECT_RES);
 }
 
 /****************************************************************************
@@ -202,17 +382,20 @@ static void game_init(gamestate_t *game, SDL_DisplayMode *screen) {
 
 int main(int argc, char **argv) {
   gamestate_t gamestate;
+  math_obj_t math;
   SDL_DisplayMode dm = {0};
   SDL_DisplayMode tempdm;
   SDL_Event event;
   int mouse_x;
   int mouse_y;
   int randseed = 0;
+  double obj_value;
   bool seed_provided = false;
   bool running = true;
   bool show_network = false;
   bool mouse_left_pressed = false;
   bool mouse_right_pressed = false;
+  bool draw_heatmap = false;
 
   /* Initialize game state defaults */
 
@@ -271,22 +454,31 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  gamestate.m = strtoul(argv[optind++], NULL, 10);
+  gamestate.m = (unsigned)strtoul(argv[optind++], NULL, 10);
   if (gamestate.m < 1) {
     fprintf(stderr, "Invalid number of ground units: %u\n", gamestate.m);
     exit(EXIT_FAILURE);
   }
 
-  /* Allocate sufficient number of agents */
+  gamestate.nagents = gamestate.n + gamestate.m;
 
-  gamestate.uavs = malloc(sizeof(*gamestate.uavs) * gamestate.n);
-  if (gamestate.uavs == NULL) {
-    fprintf(stderr, "Failed to allocate agents: %d\n", errno);
+  /* Create text rendering tools */
+
+  if (TTF_Init() < 0) {
+    fprintf(stderr, "Could not initialize SDL2TTF: %s\n", TTF_GetError());
     exit(EXIT_FAILURE);
   }
 
-  gamestate.ground = malloc(sizeof(*gamestate.ground) * gamestate.n);
-  if (gamestate.ground == NULL) {
+  TTF_Font *font = TTF_OpenFont(FONT_PATH, FONT_SIZE);
+  if (font == NULL) {
+    fprintf(stderr, "Couldn't open font '" FONT_PATH "': %s\n", TTF_GetError());
+    exit(EXIT_FAILURE);
+  }
+
+  /* Allocate sufficient number of agents */
+
+  gamestate.agents = malloc(sizeof(*gamestate.agents) * gamestate.nagents);
+  if (gamestate.agents == NULL) {
     fprintf(stderr, "Failed to allocate agents: %d\n", errno);
     exit(EXIT_FAILURE);
   }
@@ -301,6 +493,7 @@ int main(int argc, char **argv) {
 
   if (SDL_Init(SDL_INIT_VIDEO) < 0) {
     fprintf(stderr, "Could not initialize SDL: %s\n", SDL_GetError());
+    exit(EXIT_FAILURE);
   }
 
   SDL_GetDesktopDisplayMode(0, &tempdm);
@@ -328,6 +521,8 @@ int main(int argc, char **argv) {
   }
 
   game_init(&gamestate, &dm);
+
+  math_init(&math, &gamestate);
 
   /* Simulation loop */
 
@@ -384,6 +579,9 @@ int main(int argc, char **argv) {
         case SDLK_n:
           show_network = !show_network;
           break;
+        case SDLK_h:
+          draw_heatmap = !draw_heatmap;
+          break;
         case SDLK_SPACE:
           game_init(&gamestate, &dm);
           break;
@@ -426,6 +624,10 @@ int main(int argc, char **argv) {
       }
     }
 
+    /* Compute objective value */
+
+    obj_value = math_get_obj_value(&math, &gamestate);
+
     /* Process events */
 
     /* This allows a kind of "click and drag" effect when we have an agent
@@ -445,7 +647,13 @@ int main(int argc, char **argv) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
     SDL_RenderClear(renderer);
 
-    /* Draw heat map background TODO: */
+    /* Draw heat map background */
+
+    if (draw_heatmap) {
+      agent_t tmp = gamestate.agents[gamestate.sel_idx];
+      draw_compute_heatmap(renderer, &math, &gamestate);
+      gamestate.agents[gamestate.sel_idx] = tmp;
+    }
 
     /* Draw graph between agents */
 
@@ -462,14 +670,16 @@ int main(int argc, char **argv) {
     /* Draw UAVs */
 
     SDL_SetRenderDrawColor(renderer, 0xff, 0, 0, SDL_ALPHA_OPAQUE);
-    draw_agents(renderer, gamestate.uavs, gamestate.n);
+    draw_agents(renderer, gamestate.agents, gamestate.n);
 
     /* Draw ground units */
 
     SDL_SetRenderDrawColor(renderer, 0, 0xff, 0, SDL_ALPHA_OPAQUE);
-    draw_agents(renderer, gamestate.ground, gamestate.m);
+    draw_agents(renderer, &gamestate.agents[gamestate.n], gamestate.m);
 
-    /* TODO: draw objective value */
+    /* Draw objective value */
+
+    draw_obj_value(renderer, font, obj_value);
 
     /* Show what was drawn */
 
@@ -478,8 +688,9 @@ int main(int argc, char **argv) {
 
   /* Release resources */
 
-  free(gamestate.uavs);
-  free(gamestate.ground);
+  math_free(&math);
+  free(gamestate.agents);
+  TTF_CloseFont(font);
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();

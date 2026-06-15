@@ -10,9 +10,9 @@
 "MENTS:\n     n          Number of UAVs.\n     m          Number of ground un" \
 "its.\n\nCONTROLS:\n    This game is visualized using SDL2 and accepts keyboa" \
 "rd input.\n\n    q           Quit the game.\n    n           Show network co" \
-"nnections.\n    w           Move selected UAV up.\n    a           Move sele" \
-"cted UAV left.\n    s           Move selected UAV down.\n    d           Mov" \
-"e selected UAV right.\n    Up          Select next UAV in the list.\n    Dow" \
-"n        Select previous UAV in the list.\n    Esc         Quit the game.\n " \
-"   Space       Re-start the game.\n\n    Mouse click: Move selected UAV to c" \
-"licked point.\n"
+"nnections.\n    h           Show heatmap.\n    w           Move selected UAV" \
+" up.\n    a           Move selected UAV left.\n    s           Move selected" \
+" UAV down.\n    d           Move selected UAV right.\n    Up          Select" \
+" next UAV in the list.\n    Down        Select previous UAV in the list.\n  " \
+"  Esc         Quit the game.\n    Space       Re-start the game.\n\n    Mous" \
+"e click: Move selected UAV to clicked point.\n"
