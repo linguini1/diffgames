@@ -4,9 +4,6 @@
 
 #include <errno.h>
 #include <getopt.h>
-#include <gsl/gsl_matrix_double.h>
-#include <gsl/gsl_permutation.h>
-#include <gsl/gsl_vector_double.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -22,6 +19,9 @@
 #include <gsl/gsl_eigen.h>
 #include <gsl/gsl_linalg.h>
 #include <gsl/gsl_matrix.h>
+#include <gsl/gsl_matrix_double.h>
+#include <gsl/gsl_permutation.h>
+#include <gsl/gsl_vector_double.h>
 
 #include "3dtools.h"
 #include "SDL_render.h"
