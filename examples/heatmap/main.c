@@ -171,18 +171,22 @@ static void game_init(gamestate_t *game, SDL_DisplayMode *screen) {
 
   /* Randomly initialize agent positions within the screen size, centered
    * around the middle of the screen.
+   *
+   * We initialize the ground agents first so that it is possible for the user
+   * to try multiple different simulations with the same configuration of ground
+   * agents but a different number of UAVs.
    */
-
-  for (unsigned i = 0; i < game->n; i++) {
-    game->agents[i].pos.x = randval(0.5 * game->center.x, 1.5 * game->center.x);
-    game->agents[i].pos.y = randval(0.5 * game->center.y, 1.5 * game->center.y);
-    game->agents[i].pos.z = game->z_uav;
-  }
 
   for (unsigned i = game->n; i < game->n + game->m; i++) {
     game->agents[i].pos.x = randval(0.5 * game->center.x, 1.5 * game->center.x);
     game->agents[i].pos.y = randval(0.5 * game->center.y, 1.5 * game->center.y);
     game->agents[i].pos.z = 0;
+  }
+
+  for (unsigned i = 0; i < game->n; i++) {
+    game->agents[i].pos.x = randval(0.5 * game->center.x, 1.5 * game->center.x);
+    game->agents[i].pos.y = randval(0.5 * game->center.y, 1.5 * game->center.y);
+    game->agents[i].pos.z = game->z_uav;
   }
 
   /* The first UAV is our selected UAV to move */
@@ -439,7 +443,7 @@ int main(int argc, char **argv) {
   unsigned n_comp;
   bool seed_provided = false;
   bool running = true;
-  bool show_network = false;
+  bool show_network = true;
   bool mouse_left_pressed = false;
   bool mouse_right_pressed = false;
   bool draw_heatmap = false;
