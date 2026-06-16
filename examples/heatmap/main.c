@@ -439,7 +439,7 @@ int main(int argc, char **argv) {
   unsigned n_comp;
   bool seed_provided = false;
   bool running = true;
-  bool show_network = false;
+  bool show_network = true;
   bool mouse_left_pressed = false;
   bool mouse_right_pressed = false;
   bool draw_heatmap = false;
