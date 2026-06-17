@@ -239,20 +239,18 @@ static double corr_sigmoid(const vec3d_t *p1, const vec3d_t *p2, double thresh,
 }
 
 static void net_lpl_init(math_obj_t *math, const gamestate_t *game) {
-  bool both_evaders;
-
   /* Populate all of the matrix elements */
 
   for (unsigned i = 0; i < game->nagents; i++) {
     for (unsigned j = 0; j < game->nagents; j++) {
-      both_evaders = i >= game->n && j >= game->n;
-      if (!both_evaders && i != j) {
-        gsl_matrix_set(math->net_lpl, i, j,
-                       -corr_sigmoid(&game->agents[i].pos, &game->agents[j].pos,
-                                     game->ploss_limit, SIGMOID_K));
-      } else {
+      if (i == j) {
         gsl_matrix_set(math->net_lpl, i, j, 0.0);
+        continue;
       }
+
+      gsl_matrix_set(math->net_lpl, i, j,
+                     -corr_sigmoid(&game->agents[i].pos, &game->agents[j].pos,
+                                   game->ploss_limit, SIGMOID_K));
     }
   }
 
@@ -329,7 +327,7 @@ static void draw_agents(SDL_Renderer *renderer, agent_t *agents, unsigned n) {
 }
 
 static void draw_graph(SDL_Renderer *renderer, gamestate_t *game) {
-  for (unsigned i = 0; i < game->n; i++) {
+  for (unsigned i = 0; i < game->nagents; i++) {
     for (unsigned j = 0; j < game->nagents; j++) {
       if (i == j) continue; /* No same-agent consideration */
 
@@ -343,7 +341,7 @@ static void draw_graph(SDL_Renderer *renderer, gamestate_t *game) {
 
 static void draw_radii(SDL_Renderer *renderer, gamestate_t *game) {
   double radius = inverse_ploss(game->ploss_limit);
-  for (unsigned i = 0; i < game->n; i++) {
+  for (unsigned i = 0; i < game->nagents; i++) {
     render_circle(renderer, (vec2d_t *)&game->agents[i].pos, radius,
                   CONN_RADIUS_RES);
   }
