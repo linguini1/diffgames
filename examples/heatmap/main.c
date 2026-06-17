@@ -41,6 +41,8 @@
 #define SELECT_RADIUS (4) /* m */
 #define SELECT_RES (20)
 
+#define CONN_RADIUS_RES (30)
+
 #define LAMBDA (0.32764203)
 #define SIGMOID_K (4.0)
 
@@ -109,6 +111,10 @@ static void debug_print_matrix(gsl_matrix *mat) {
 
 static double ploss_d(double distance) {
   return 20.0 * log10((4 * M_PI / LAMBDA) * distance);
+}
+
+static double inverse_ploss(double ploss) {
+  return pow(10.0, ploss / 20.0) / (4 * M_PI / LAMBDA);
 }
 
 static double ploss(const vec3d_t *p1, const vec3d_t *p2) {
@@ -335,6 +341,14 @@ static void draw_graph(SDL_Renderer *renderer, gamestate_t *game) {
   }
 }
 
+static void draw_radii(SDL_Renderer *renderer, gamestate_t *game) {
+  double radius = inverse_ploss(game->ploss_limit);
+  for (unsigned i = 0; i < game->n; i++) {
+    render_circle(renderer, (vec2d_t *)&game->agents[i].pos, radius,
+                  CONN_RADIUS_RES);
+  }
+}
+
 static void draw_stats(SDL_Renderer *renderer, TTF_Font *font,
                        const gamestate_t *game, double value,
                        unsigned components) {
@@ -444,6 +458,7 @@ int main(int argc, char **argv) {
   bool seed_provided = false;
   bool running = true;
   bool show_network = true;
+  bool show_radii = false;
   bool mouse_left_pressed = false;
   bool mouse_right_pressed = false;
   bool draw_heatmap = false;
@@ -633,6 +648,9 @@ int main(int argc, char **argv) {
         case SDLK_h:
           draw_heatmap = !draw_heatmap;
           break;
+        case SDLK_r:
+          show_radii = !show_radii;
+          break;
         case SDLK_c:
           /* Put the selected UAV in its best spot */
 
@@ -723,6 +741,12 @@ int main(int argc, char **argv) {
     /* Draw selection bubble around selected UAV */
 
     draw_selector_circle(renderer, &gamestate);
+
+    /* Show connection radii */
+
+    if (show_radii) {
+      draw_radii(renderer, &gamestate);
+    }
 
     /* Draw UAVs */
 

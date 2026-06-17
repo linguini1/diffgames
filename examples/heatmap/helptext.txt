@@ -26,6 +26,7 @@ CONTROLS:
     q           Quit the game.
     n           Show network connections.
     h           Show heatmap.
+    r           Show connection radii.
     w           Move selected UAV up.
     a           Move selected UAV left.
     s           Move selected UAV down.
