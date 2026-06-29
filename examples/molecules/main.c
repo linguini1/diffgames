@@ -39,9 +39,10 @@
 #define LAMBDA (0.32764203)
 #define SIGMOID_K (4.0)
 
-#define AGENT_SIZE (3.0) /* m^2 */
-#define AGENT_VEL (3.0)  /* m / s */
-#define DT (0.1)
+#define AGENT_SIZE (3.0)        /* m^2 */
+#define AGENT_VEL (3.0)         /* m / s */
+#define HEADING_VARIATION (0.2) /* rad / s */
+#define DT (0.1)                /* s */
 
 #define randval(min, max) ((min) + (rand() / (RAND_MAX / ((max) - (min)))))
 
@@ -72,6 +73,7 @@ typedef struct agent {
   status_e status;        /* Agent connection status */
   vec3d_t pos;            /* Agent position in 3D space */
   neighbour_t neighbours; /* Linked list of connected neighbours */
+  double heading;         /* Optional heading for random walking ground units */
 } agent_t;
 
 typedef struct {
@@ -85,6 +87,7 @@ typedef struct {
   vec2d_t screen;        /* Screen resolution scaled */
   vec2d_t screen_scaled; /* Screen resolution scaled */
   vec2d_t center;        /* Screen center */
+  bool randwalk;         /* Ground units move randomly */
 } gamestate_t;
 
 /****************************************************************************
@@ -145,9 +148,16 @@ static void agent_move(agent_t *agent, gamestate_t *game) {
   double best_dist = INFINITY;
   double dist;
 
-  /* If we're a ground agent, we don't move (yet) */
+  /* Ground agent movement */
 
-  if (agent->kind == AKIND_GROUND) return;
+  if (agent->kind == AKIND_GROUND) {
+    if (!game->randwalk) return;
+
+    agent->heading += randval(-HEADING_VARIATION, HEADING_VARIATION);
+    agent->pos.x += AGENT_VEL * DT * sin(agent->heading);
+    agent->pos.y += AGENT_VEL * DT * cos(agent->heading);
+    return;
+  }
 
   /* Move the UAV according to the algorithm
    *
@@ -380,6 +390,9 @@ static void game_init(gamestate_t *game, SDL_DisplayMode *screen) {
     game->agents[i].kind = AKIND_GROUND;
     game->agents[i].status = STAT_ISOLATED;
     list_initialize(&game->agents[i].neighbours.node);
+    if (game->randwalk) {
+      game->agents[i].heading = randval(0.0, M_2_PI);
+    }
   }
 
   for (unsigned i = 0; i < game->n; i++) {
@@ -470,11 +483,12 @@ int main(int argc, char **argv) {
   gamestate.ploss_limit = 65.0;
   gamestate.z_uav = 10.0;
   gamestate.scale = 4.0;
+  gamestate.randwalk = false;
 
   /* Parse input arguments */
 
   int c;
-  while ((c = getopt(argc, argv, ":hx:y:s:l:z:r:")) != -1) {
+  while ((c = getopt(argc, argv, ":hmx:y:s:l:z:r:")) != -1) {
     switch (c) {
     case 'h':
       puts(HELP_TEXT);
@@ -491,6 +505,12 @@ int main(int argc, char **argv) {
       break;
     case 'l':
       gamestate.ploss_limit = strtold(optarg, NULL);
+      break;
+    case 'z':
+      gamestate.z_uav = strtold(optarg, NULL);
+      break;
+    case 'm':
+      gamestate.randwalk = true;
       break;
     case 'r':
       seed_provided = true;

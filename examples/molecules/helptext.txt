@@ -15,6 +15,7 @@ OPTIONS:
     -l <limit>  Path loss limit for severed connection in dB. Default 65dB.
     -z <height> Fixed z-coordinate (altitude) of UAVs. Default 10.0 m.
     -r <seed>   Random seed to seed the random library with.
+    -m          If passed, ground units move randomly instead of being static.
 
 ARGUMENTS:
      n          Number of UAVs.
