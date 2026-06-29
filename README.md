@@ -49,6 +49,9 @@ specific information about the example you're using, run the example with the
 ./bin/particle -h
 ```
 
+**NOTE:** Some examples use different licenses (i.e., ones that link against the
+GNU Scientific Library use the GPLv3 license).
+
 ### Replay
 
 Replay simulation records from my own formulation of a pursuit-evasion
