@@ -11,6 +11,7 @@ CFLAGS += -lm
 
 ifneq ($(DEBUG),)
 CFLAGS += -DCONFIG_DEBUG
+CFLAGS += -g
 endif
 
 ifeq ($(OS), Windows_NT)
@@ -23,7 +24,7 @@ CFLAGS += -I $(SDLTTF_PATH)/include
 CFLAGS += -I $(SDLTTF_PATH)/include/SDL2
 CFLAGS += -L $(SDLTTF_PATH)/lib
 CFLAGS += -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf
-CFLAGS += -lgsl -lgslcblas -lm
+CFLAGS += -lgsl -lgslcblas
 else
 CFLAGS += $(shell sdl2-config --cflags --libs)
 CFLAGS += -lSDL2_ttf # SDL2 TTF library
