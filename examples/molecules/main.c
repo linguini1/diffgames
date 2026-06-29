@@ -204,16 +204,21 @@ static void agent_move(agent_t *agent, gamestate_t *game) {
       break;
     }
 
-    /* If we are leaf node, let's stay within our one neighbour's radius and try
-     * to move towards the nearest agent.
+    /* If we are a leaf node, let's stay within our one neighbour's radius and
+     * try to move towards the nearest ground agent.
      *
-     * TODO: if we can actually reach multiple agents, we should pick the one
-     * with the highest status/who is a ground agent.
+     * NOTE: originally, this rule was to move towards the nearest agent who is
+     * not us or our one neighbour. However, moving towards only ground agents
+     * should improve the number of ground agents we manage to connect and
+     * should be comparable in performance to the original rule (since other
+     * agents would likely be intercepted on the way to a ground agent).
      */
 
     for (unsigned i = 0; i < game->nagents; i++) {
 
-      if (&game->agents[i] == agent) continue; /* Don't pick ourselves */
+      /* Don't pick ourselves or our single neighbour */
+
+      if (game->agents[i].kind != AKIND_GROUND) continue;
 
       dist = vec3d_dist_r(&game->agents[i].pos, &agent->pos);
 
@@ -297,7 +302,11 @@ static void game_compute_statuses(gamestate_t *game) {
       if (entry->agent->kind == AKIND_GROUND) {
         game->agents[i].status = STAT_TETHERED;
         all_isolated = false;
-        /* TODO: Inform neighbours that we are tethered */
+
+        /* NOTE: We do not inform neighbours that we are tethered. On the next
+         * message passing iteration, they will realize our status was updated.
+         */
+
         break;
       }
 
