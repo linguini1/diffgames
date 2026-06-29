@@ -139,7 +139,9 @@ static void agent_move(agent_t *agent, gamestate_t *game) {
   agent_t *best_agent;
   neighbour_t *entry;
   size_t len;
+  size_t total_vecs;
   vec3d_t barycenter = VEC3D_SINIT(0.0, 0.0, 0.0);
+  vec3d_t scaled_pos;
   double best_dist = INFINITY;
   double dist;
 
@@ -191,15 +193,31 @@ static void agent_move(agent_t *agent, gamestate_t *game) {
   case STAT_TETHERED:
   case STAT_HOP:
 
-    /* If we're not a leaf node, move to the barycenter of our neighbours */
+    /* If we're not a leaf node, move to the barycenter of our neighbours,
+     * restricted however to maintaining any existing connection to a ground
+     * agent.
+     */
 
     len = list_length(&agent->neighbours.node);
     if (len > 1) {
+
+      /* Compute the barycenter, giving ground agents significantly more weight.
+       */
+
+      total_vecs = 0;
       list_for_every_entry(&agent->neighbours.node, entry, neighbour_t, node) {
-        vec3d_add(&barycenter, &entry->agent->pos, &barycenter);
+        if (entry->agent->kind == AKIND_GROUND) {
+          vec3d_scale(&entry->agent->pos, len, &scaled_pos);
+          total_vecs += len;
+        } else {
+          scaled_pos = entry->agent->pos;
+          total_vecs++;
+        }
+
+        vec3d_add(&barycenter, &scaled_pos, &barycenter);
       }
 
-      barycenter = vec3d_scale_r(&barycenter, 1.0 / len);
+      barycenter = vec3d_scale_r(&barycenter, 1.0 / total_vecs);
       agent_move_towards(agent, &barycenter);
       break;
     }
