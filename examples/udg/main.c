@@ -90,6 +90,15 @@ typedef struct {
  * Private Functions
  ****************************************************************************/
 
+/* Determine the radius of the cross-section of a sphere of radius `r` centered
+ * at plane `z` when 'sliced' by plane `new_z`.
+ */
+
+static double projected_radius(double r, double old_z, double new_z) {
+  double height = fabs(old_z - new_z);
+  return sqrt((r * r) - (height * height));
+}
+
 static double ploss_d(double distance) {
   return 20.0 * log10((4 * M_PI / LAMBDA) * distance);
 }
@@ -275,21 +284,27 @@ static void draw_graph(SDL_Renderer *renderer, gamestate_t *game) {
 }
 
 static void draw_radii(SDL_Renderer *renderer, gamestate_t *game) {
+  /* We render the radii of ground agents from the perspective of the UAV
+   * plane (bird's eye view). From this plane, the transmission radius of the
+   * of the ground agents will appear smaller since it must travel some
+   * non-zero z-height upwards. (i.e. we are looking at a cross-section of the
+   * sphere).
+   */
+
   double radius = inverse_ploss(game->ploss_limit);
+  double ground_radius = projected_radius(radius, 0.0, game->z_uav);
+
   for (unsigned i = 0; i < game->nagents; i++) {
 
     if (game->agents[i].kind == AKIND_UAV) {
-      /* Pale red */
-
       SDL_SetRenderDrawColor(renderer, 0xff, 0x7f, 0x7f, SDL_ALPHA_OPAQUE);
+      render_circle(renderer, (vec2d_t *)&game->agents[i].pos, radius,
+                    CONN_RADIUS_RES);
     } else {
-      /* Pale green */
-
       SDL_SetRenderDrawColor(renderer, 0x7f, 0xff, 0x7f, SDL_ALPHA_OPAQUE);
+      render_circle(renderer, (vec2d_t *)&game->agents[i].pos, ground_radius,
+                    CONN_RADIUS_RES);
     }
-
-    render_circle(renderer, (vec2d_t *)&game->agents[i].pos, radius,
-                  CONN_RADIUS_RES);
   }
 }
 
