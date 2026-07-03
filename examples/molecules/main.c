@@ -145,21 +145,31 @@ static void game_compute_neighbours(gamestate_t *game) {
   /* NOTE: the approach taken by this function, of updating everyone's neighbour
    * list, implies the ideal medium approach where messages are instantaneously
    * broadcast and received each time this function is called.
+   *
    */
 
   for (unsigned i = 0; i < game->nagents; i++) {
 
-    /* Check all of the neighbours in the existing list of neighbours. If any
-     * of them have left the transmission radius, remove them
+    /* Clear list
+     * NOTE: Since we have to check this agent against all other agents to
+     * determine what's in the transmission range, we might as well redo the
+     * neighbour list from scratch each time.
      */
 
     list_for_every_entry_safe(&game->agents[i].neighbours.node, entry, tmp,
                               neighbour_t, node) {
-      if (vec3d_dist_r(&game->agents[i].pos, &entry->agent->pos)) {
+      if (vec3d_dist_r(&game->agents[i].pos, &entry->agent->pos) >
+          game->trans_radius) {
         list_delete(&entry->node);
         free(entry);
       }
     }
+
+    list_initialize(&game->agents[i].neighbours.node);
+
+    /* Check all of the neighbours in the existing list of neighbours. If any
+     * of them have left the transmission radius, remove them
+     */
 
     for (unsigned j = 0; j < game->nagents; j++) {
       if (i == j) continue;
@@ -167,13 +177,9 @@ static void game_compute_neighbours(gamestate_t *game) {
       if (vec3d_dist_r(&game->agents[i].pos, &game->agents[j].pos) <
           game->trans_radius) {
 
-        /* If the agent within range is already in the list, then don't add it
-         * a second time.
+        /* Within range and cannot be a duplicate due to the way we've iterated;
+         * add to the list.
          */
-
-        if (agent_is_neighbour_of(&game->agents[j], &game->agents[i])) continue;
-
-        /* Not a duplicate, add to the list */
 
         tmp = malloc(sizeof(neighbour_t));
         if (tmp == NULL) {
@@ -251,30 +257,52 @@ static void agent_move(agent_t *agent, double trans_radius) {
   neighbour_t *n2;
   double r1;
   double r2;
+  vec3d_t toward;
   vec2d_t points[2];
-
-  if (agent->kind == AKIND_GROUND) return; /* These agents use random walk */
+  unsigned nneighbours;
 
   /* We'll assume 32 is enough for now; I don't wanna deal with dynamic arrays
    * yet.
    */
 
-  static intersect_t intersections[32];
+  static intersect_t intersections[64];
   unsigned count = 0; /* Number of intersection points found so far */
 
-  /* First, we compute the intersection points of this agent and its neighbours.
-   * We check intersection of circles, correcting the radius of the
-   * other agent's transmission circle to match the z-plane of the moving agent.
-   * This is because we assume that agents can only move in 2D within their own
-   * plane.
+  if (agent->kind == AKIND_GROUND) return; /* These agents use random walk */
+
+  nneighbours = list_length(&agent->neighbours.node);
+
+  /* If this agent has no neighbours, then we should just move somewhere
+   * randomly.
    */
 
-  list_for_every_entry(&agent->neighbours.node, n1, neighbour_t, node) {
+  if (nneighbours == 0) {
+    return; /* TODO: randomly move */
+  }
+
+  /* If we only have one neighbour, we should repel away from it (but within the
+   * transmission radius) to maximize area covered by both.
+   *
+   * We get the vector pointing towards the neighbour and our distance from the
+   * neighbour, then scale the vector in the reverse direction toward the circle
+   * extremity. We then move to that point.
+   */
+
+  if (nneighbours == 1) {
+    n1 = list_first_entry(&agent->neighbours.node, neighbour_t, node);
+    vec2d_sub(&agent->pos, &n1->agent->pos, &toward);
     r1 = projected_radius(trans_radius, n1->agent->pos.z, agent->pos.z);
-    if (!circle_intersection((vec2d_t *)&agent->pos, (vec2d_t *)&n1->agent->pos,
-                             trans_radius, r1, points)) {
-      continue; /* No intersection */
-    }
+    r2 = vec2d_norm_r((vec2d_t *)&toward); /* r2 holds distance to neighbour */
+
+    /* Scale by the remaining radius and then offset by neighbour position to
+     * make it once again an absolute position instead of a relative vector.
+     */
+
+    vec2d_scale(&toward, r1 / r2, &toward);
+    vec2d_add(&toward, &n1->agent->pos, &toward);
+    toward.z = agent->pos.z; /* Stay within the plane */
+    agent_move_towards(agent, &toward);
+    return;
   }
 
   /* Next, compute the intersection points of the agent's neighbours,
@@ -299,12 +327,26 @@ static void agent_move(agent_t *agent, double trans_radius) {
         continue; /* No intersection */
       }
 
-      if (count < array_len(intersections)) {
-        /* Add our point(s) to the array TODO */
+      /* Append the first point */
 
-        intersections[count].within = 0; /* Set to 0 initially */
-        count++;
+      assert(count < array_len(intersections));
+      intersections[count].pos.x = points[0].x;
+      intersections[count].pos.y = points[0].y;
+      intersections[count].within = 0;
+      count++;
+
+      if (fabs(points[0].x - points[1].x) <= 1e-5 &&
+          fabs(points[0].y - points[1].y) <= 1e-5) {
+        continue; /* If points are identical, we're done */
       }
+
+      /* Otherwise, add the second unique point */
+
+      assert(count < array_len(intersections));
+      intersections[count].pos.x = points[1].x;
+      intersections[count].pos.y = points[1].y;
+      intersections[count].within = 0;
+      count++;
     }
   }
 
@@ -314,7 +356,15 @@ static void agent_move(agent_t *agent, double trans_radius) {
    *
    * Should we move in a direction such that our furthest neighbour is pushed
    * towards the extremity of our radius?
+   *
+   * For now, we will just move towards the first neighbour. TODO: change this.
    */
+
+  if (count == 0) {
+    n1 = list_first_entry(&agent->neighbours.node, neighbour_t, node);
+    agent_move_towards(agent, &n1->agent->pos);
+    return;
+  }
 
   /* Now, determine the set of intersection points that yield the greatest
    * number of new connections (i.e., the points which are within the greatest
@@ -347,7 +397,7 @@ static void agent_move(agent_t *agent, double trans_radius) {
    * FOR NOW: pick the first one
    */
 
-  // agent_move_towards(agent, &intersections[0].pos);
+  agent_move_towards(agent, &intersections[0].pos);
 }
 
 static void game_init(gamestate_t *game, SDL_DisplayMode *screen) {
