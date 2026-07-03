@@ -38,6 +38,7 @@
 
 #define AGENT_SIZE (3.0)        /* m^2 */
 #define AGENT_VEL (3.0)         /* m / s */
+#define MOVEMENT_CUTOFF (0.1)   /* m */
 #define HEADING_VARIATION (0.2) /* rad / s */
 #define DT (0.1)                /* s */
 
@@ -85,6 +86,7 @@ typedef struct {
   unsigned m;            /* Number of ground units */
   unsigned nagents;      /* Number of agents for convenience */
   double trans_radius;   /* Distance limit */
+  double eff_radius;     /* Effective radius believed by agents */
   double z_uav;          /* Fixed z-coordinate of UAVs */
   double scale;          /* Rendering scale */
   vec2d_t screen;        /* Screen resolution scaled */
@@ -250,9 +252,12 @@ static bool circle_intersection(vec2d_t *p1, vec2d_t *p2, double r1, double r2,
  * NOTE: this function does not handle two unique agents who occupy the same
  * point in space. This results in infinitely many intersection points. This
  * case should be explicitly handled.
+ *
+ * TODO: agents seems to overdo their movement and when we get to an
+ * intersection point we are unable to maintain it.
  */
 
-static void agent_move(agent_t *agent, double trans_radius) {
+static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
   neighbour_t *n1;
   neighbour_t *n2;
   double r1;
@@ -261,8 +266,6 @@ static void agent_move(agent_t *agent, double trans_radius) {
   vec2d_t points[2];
   unsigned nneighbours;
 
-  trans_radius *= 0.98; /* Help overshooting */
-
   /* We'll assume 32 is enough for now; I don't wanna deal with dynamic arrays
    * yet.
    */
@@ -270,7 +273,14 @@ static void agent_move(agent_t *agent, double trans_radius) {
   static intersect_t intersections[64];
   unsigned count = 0; /* Number of intersection points found so far */
 
-  if (agent->kind == AKIND_GROUND) return; /* These agents use random walk */
+  if (agent->kind == AKIND_GROUND) {
+    if (!randwalk) return;
+
+    agent->heading += randval(-HEADING_VARIATION, HEADING_VARIATION);
+    agent->pos.x += AGENT_VEL * DT * cos(agent->heading);
+    agent->pos.y += AGENT_VEL * DT * sin(agent->heading);
+    return;
+  }
 
   nneighbours = list_length(&agent->neighbours.node);
 
@@ -279,7 +289,10 @@ static void agent_move(agent_t *agent, double trans_radius) {
    */
 
   if (nneighbours == 0) {
-    return; /* TODO: randomly move */
+    agent->heading += randval(-HEADING_VARIATION, HEADING_VARIATION);
+    agent->pos.x += AGENT_VEL * DT * cos(agent->heading);
+    agent->pos.y += AGENT_VEL * DT * sin(agent->heading);
+    return;
   }
 
   /* If we only have one neighbour, we should repel away from it (but within the
@@ -574,6 +587,8 @@ int main(int argc, char **argv) {
     }
   }
 
+  gamestate.eff_radius = gamestate.trans_radius * 0.95;
+
   /* Parse positional arguments */
 
   if (argc <= optind) {
@@ -699,7 +714,8 @@ int main(int argc, char **argv) {
     /* Perform game updates */
 
     for (unsigned i = 0; i < gamestate.nagents; i++) {
-      agent_move(&gamestate.agents[i], gamestate.trans_radius);
+      agent_move(&gamestate.agents[i], gamestate.eff_radius,
+                 gamestate.randwalk);
     }
 
     game_compute_neighbours(&gamestate);
