@@ -57,10 +57,18 @@ typedef struct neighbour {
   struct agent *agent;   /* An agent in this neighbourhood */
 } neighbour_t;
 
-/* An intersection point of 2 transmission radii */
+/* An intersection point of 2 transmission radii.
+ *
+ * NOTE: we are dealing with intersections of spheres. When we check their
+ * intersection, we need to look at the 2D projection of the sphere into the
+ * moving agent's z-plane. Otherwise, we will consider intersection points that
+ * are not accessible. Therefore, the `pos` member of this struct is the 2D
+ * position of the intersection point considering the moving agent's z-plane.
+ */
 
 typedef struct {
-  vec2d_t pos; /* 2D position of the intersection */
+  vec3d_t pos;     /* 2D position of the intersection, where z coordinate is the
+                      plane the intersection was considered on. */
   unsigned within; /* Transmission radii this falls within. */
 } intersect_t;
 
@@ -76,7 +84,7 @@ typedef struct {
   unsigned n;            /* Number of UAVs */
   unsigned m;            /* Number of ground units */
   unsigned nagents;      /* Number of agents for convenience */
-  double dist_limit;     /* Distance limit */
+  double trans_radius;   /* Distance limit */
   double z_uav;          /* Fixed z-coordinate of UAVs */
   double scale;          /* Rendering scale */
   vec2d_t screen;        /* Screen resolution scaled */
@@ -88,6 +96,15 @@ typedef struct {
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
+
+/* Determine the radius of the cross-section of a sphere of radius `r` centered
+ * at plane `z` when 'sliced' by plane `new_z`.
+ */
+
+static double projected_radius(double r, double old_z, double new_z) {
+  double height = fabs(old_z - new_z);
+  return sqrt((r * r) - (height * height));
+}
 
 static void game_update_scale(gamestate_t *game, double scale) {
   game->scale = scale;
@@ -148,7 +165,7 @@ static void game_compute_neighbours(gamestate_t *game) {
       if (i == j) continue;
 
       if (vec3d_dist_r(&game->agents[i].pos, &game->agents[j].pos) <
-          game->dist_limit) {
+          game->trans_radius) {
 
         /* If the agent within range is already in the list, then don't add it
          * a second time.
@@ -172,13 +189,131 @@ static void game_compute_neighbours(gamestate_t *game) {
   }
 }
 
-static void agent_move(agent_t *agent) {
-  /* Move the agent according to the information it has from its neighbours
-   * messages.
+static int intersect_sorter(const void *a, const void *b) {
+  return ((intersect_t *)(b))->within - ((intersect_t *)(a))->within;
+}
+
+/*
+ * Returns false if there is no intersection. If there is an intersection, the
+ * points are returned in the `points` array.
+ *
+ * One point of intersection will cause both points to have the same value.
+ */
+static bool circle_intersection(vec2d_t *p1, vec2d_t *p2, double r1, double r2,
+                                vec2d_t points[2]) {
+  double dist;
+  double a;
+  double h;
+  double x3;
+  double y3;
+
+  vec2d_dist(p1, p2, &dist);
+
+  if (dist > r1 + r2) return false; /* No intersection */
+
+  /* Adapted from:
+   * https://stackoverflow.com/questions/3349125/circle-circle-intersection-points
    */
 
-  /* First, compute the intersection points of the agent's neighbours,
+  a = (r1 * r1 - r2 * r2 + dist * dist) / (2 * dist);
+  h = sqrt(r1 * r1 - a * a);
+
+  x3 = p1->x + a * (p2->x - p1->x) / dist;
+  y3 = p1->y + a * (p2->y - p1->y) / dist;
+
+  points[0].x = x3 + h * (p2->y - p1->y) / dist;
+  points[1].x = x3 - h * (p2->y - p1->y) / dist;
+
+  points[0].y = y3 - h * (p2->x - p1->x) / dist;
+  points[1].y = y3 + h * (p2->x - p1->x) / dist;
+
+  return true;
+}
+
+/* Move the agent according to the information it has from its neighbours
+ * messages. `trans_radius` is the transmission distance set by the game
+ * globally.
+ *
+ * NOTE: this function assumes that any agent with at least one neighbour has
+ * intersection points to move towards. This is WRONG. It is possible for one
+ * agent with a smaller radius (i.e. ground agent due to projection) to have
+ * its transmission radius fully contained within the agent of interest's
+ * transmission radius, therefore yielding no intersection points. We need to
+ * decide what to do in this case.
+ *
+ * NOTE: this function does not handle two unique agents who occupy the same
+ * point in space. This results in infinitely many intersection points. This
+ * case should be explicitly handled.
+ */
+
+static void agent_move(agent_t *agent, double trans_radius) {
+  neighbour_t *n1;
+  neighbour_t *n2;
+  double r1;
+  double r2;
+  vec2d_t points[2];
+
+  if (agent->kind == AKIND_GROUND) return; /* These agents use random walk */
+
+  /* We'll assume 32 is enough for now; I don't wanna deal with dynamic arrays
+   * yet.
+   */
+
+  static intersect_t intersections[32];
+  unsigned count = 0; /* Number of intersection points found so far */
+
+  /* First, we compute the intersection points of this agent and its neighbours.
+   * We check intersection of circles, correcting the radius of the
+   * other agent's transmission circle to match the z-plane of the moving agent.
+   * This is because we assume that agents can only move in 2D within their own
+   * plane.
+   */
+
+  list_for_every_entry(&agent->neighbours.node, n1, neighbour_t, node) {
+    r1 = projected_radius(trans_radius, n1->agent->pos.z, agent->pos.z);
+    if (!circle_intersection((vec2d_t *)&agent->pos, (vec2d_t *)&n1->agent->pos,
+                             trans_radius, r1, points)) {
+      continue; /* No intersection */
+    }
+  }
+
+  /* Next, compute the intersection points of the agent's neighbours,
    * pairwise.
+   */
+
+  list_for_every_entry(&agent->neighbours.node, n1, neighbour_t, node) {
+    list_for_every_entry(&agent->neighbours.node, n2, neighbour_t, node) {
+      if (n1->agent == n2->agent) continue; /* Skip agents who are the same */
+
+      /* Determine intersection point(s) of the transmission radii in this
+       * agent's z-plane using the position of the neighbours.
+       */
+
+      /* Project transmission radii to the plane of the moving agent */
+
+      r1 = projected_radius(trans_radius, n1->agent->pos.z, agent->pos.z);
+      r2 = projected_radius(trans_radius, n2->agent->pos.z, agent->pos.z);
+
+      if (!circle_intersection((vec2d_t *)&n1->agent->pos,
+                               (vec2d_t *)&n2->agent->pos, r1, r2, points)) {
+        continue; /* No intersection */
+      }
+
+      if (count < array_len(intersections)) {
+        /* Add our point(s) to the array TODO */
+
+        intersections[count].within = 0; /* Set to 0 initially */
+        count++;
+      }
+    }
+  }
+
+  /* TODO: if there are no intersection points (possible, all neighbouring
+   * agents' transmission radii are subsets of this agent's transmission
+   * radius), we need to decide what to do.
+   *
+   * Should we move in a direction such that our furthest neighbour is pushed
+   * towards the extremity of our radius?
    */
 
   /* Now, determine the set of intersection points that yield the greatest
@@ -186,12 +321,33 @@ static void agent_move(agent_t *agent) {
    * number of transmission circles/ranges).
    */
 
+  for (unsigned i = 0; i < count; i++) {
+    list_for_every_entry(&agent->neighbours.node, n1, neighbour_t, node) {
+      /* Check if this point is within this neighbour's transmission radius */
+
+      r1 = projected_radius(trans_radius, n1->agent->pos.z, agent->pos.z);
+      if (vec2d_dist_r((vec2d_t *)&agent->pos,
+                       (vec2d_t *)&intersections[i].pos) <= r1) {
+        intersections[i].within++;
+      }
+    }
+  }
+
+  /* Sort the intersection points in descending order by `within` field */
+
+  qsort(intersections, array_len(intersections), sizeof(intersections[0]),
+        intersect_sorter);
+
   /* Using the set of the optimal intersection points, choose the navigation
    * point for this agent.
    *
    * TODO: do we move towards the average of the optimal points, or do we pick
    * one to move to?
+   *
+   * FOR NOW: pick the first one
    */
+
+  // agent_move_towards(agent, &intersections[0].pos);
 }
 
 static void game_init(gamestate_t *game, SDL_DisplayMode *screen) {
@@ -269,19 +425,25 @@ static void draw_graph(SDL_Renderer *renderer, gamestate_t *game) {
 }
 
 static void draw_radii(SDL_Renderer *renderer, gamestate_t *game) {
+  /* We render the radii of ground agents from the perspective of the UAV
+   * plane (bird's eye view). From this plane, the transmission radius of the
+   * of the ground agents will appear smaller since it must travel some
+   * non-zero z-height upwards. (i.e. we are looking at a cross-section of the
+   * sphere).
+   */
+
+  double ground_radius = projected_radius(game->trans_radius, 0.0, game->z_uav);
+
   for (unsigned i = 0; i < game->nagents; i++) {
     if (game->agents[i].kind == AKIND_UAV) {
-      /* Pale red */
-
       SDL_SetRenderDrawColor(renderer, 0xff, 0x7f, 0x7f, SDL_ALPHA_OPAQUE);
+      render_circle(renderer, (vec2d_t *)&game->agents[i].pos,
+                    game->trans_radius, CONN_RADIUS_RES);
     } else {
-      /* Pale green */
-
       SDL_SetRenderDrawColor(renderer, 0x7f, 0xff, 0x7f, SDL_ALPHA_OPAQUE);
+      render_circle(renderer, (vec2d_t *)&game->agents[i].pos, ground_radius,
+                    CONN_RADIUS_RES);
     }
-
-    render_circle(renderer, (vec2d_t *)&game->agents[i].pos, game->dist_limit,
-                  CONN_RADIUS_RES);
   }
 }
 
@@ -303,7 +465,7 @@ int main(int argc, char **argv) {
   /* Initialize game state defaults */
 
   memset(&gamestate, 0, sizeof(gamestate));
-  gamestate.dist_limit = 50.0;
+  gamestate.trans_radius = 50.0;
   gamestate.z_uav = 10.0;
   gamestate.scale = 4.0;
   gamestate.randwalk = false;
@@ -327,7 +489,7 @@ int main(int argc, char **argv) {
       gamestate.scale = strtod(optarg, NULL);
       break;
     case 'd':
-      gamestate.dist_limit = strtold(optarg, NULL);
+      gamestate.trans_radius = strtold(optarg, NULL);
       break;
     case 'z':
       gamestate.z_uav = strtold(optarg, NULL);
@@ -469,6 +631,10 @@ int main(int argc, char **argv) {
     }
 
     /* Perform game updates */
+
+    for (unsigned i = 0; i < gamestate.nagents; i++) {
+      agent_move(&gamestate.agents[i], gamestate.trans_radius);
+    }
 
     game_compute_neighbours(&gamestate);
 

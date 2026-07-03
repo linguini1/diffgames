@@ -10,6 +10,10 @@
 
 #define todo(msg) assert(0 && "[TODO] " msg)
 
+/* Array length helper */
+
+#define array_len(arr) (sizeof(arr) / sizeof(arr[0]))
+
 /* Random double between min and max */
 
 #define randval(min, max) ((min) + (rand() / (RAND_MAX / ((max) - (min)))))
