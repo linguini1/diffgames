@@ -261,6 +261,8 @@ static void agent_move(agent_t *agent, double trans_radius) {
   vec2d_t points[2];
   unsigned nneighbours;
 
+  trans_radius *= 0.98; /* Help overshooting */
+
   /* We'll assume 32 is enough for now; I don't wanna deal with dynamic arrays
    * yet.
    */
@@ -301,7 +303,21 @@ static void agent_move(agent_t *agent, double trans_radius) {
     vec2d_scale(&toward, r1 / r2, &toward);
     vec2d_add(&toward, &n1->agent->pos, &toward);
     toward.z = agent->pos.z; /* Stay within the plane */
+
+    /* If we are already on the radius, we should now rotate around our
+     * neighbour by following the tangent vector.
+     */
+
+    if (vec2d_dist_r((vec2d_t *)&toward, (vec2d_t *)&agent->pos) <= 0.4) {
+      vec2d_sub(&agent->pos, &n1->agent->pos, &toward);
+      r2 = atan2(toward.y, toward.x);
+      r2 += 0.1; /* Increase by 0.1 radians to spin */
+      toward.x = n1->agent->pos.x + r1 * cos(r2);
+      toward.y = n1->agent->pos.y + r1 * sin(r2);
+    }
+
     agent_move_towards(agent, &toward);
+
     return;
   }
 
