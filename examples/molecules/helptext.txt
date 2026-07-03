@@ -2,7 +2,7 @@ Molecules
 (c) Matteo Golin 2026
 
 DESCRIPTION:
-    Ad-hoc aerial network formation inspired by molecules
+    Ad-hoc aerial network formation inspired by molecules.
 
 USAGE:
     molecules [OPTIONS] n m
@@ -12,7 +12,8 @@ OPTIONS:
     -x <width>  Window width in pixels. Default is half screen width.
     -y <height> Window height in pixels. Default is half screen height.
     -s <scale>  Rendering scale. Default 5.
-    -l <limit>  Path loss limit for severed connection in dB. Default 65dB.
+    -d <limit>  Distance loss limit for severed connection in meters. Default
+                50.0 m.
     -z <height> Fixed z-coordinate (altitude) of UAVs. Default 10.0 m.
     -r <seed>   Random seed to seed the random library with.
     -m          If passed, ground units move randomly instead of being static.

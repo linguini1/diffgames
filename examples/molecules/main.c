@@ -36,9 +36,6 @@
 
 #define CONN_RADIUS_RES (30)
 
-#define LAMBDA (0.32764203)
-#define SIGMOID_K (4.0)
-
 #define AGENT_SIZE (3.0)        /* m^2 */
 #define AGENT_VEL (3.0)         /* m / s */
 #define HEADING_VARIATION (0.2) /* rad / s */
@@ -55,22 +52,20 @@ typedef enum {
   AKIND_UAV,    /* UAV */
 } agentkind_e;
 
-/* Statuses with greater numbers have higher priority */
-
-typedef enum {
-  STAT_ISOLATED = 0, /* Not connected to any ground agent */
-  STAT_HOP = 1,      /* Connected to a ground agent indirectly */
-  STAT_TETHERED = 2, /* Directly connected to a ground agent */
-} status_e;
-
 typedef struct neighbour {
   struct list_node node; /* Linked list node */
   struct agent *agent;   /* An agent in this neighbourhood */
 } neighbour_t;
 
+/* An intersection point of 2 transmission radii */
+
+typedef struct {
+  vec2d_t pos; /* 2D position of the intersection */
+  unsigned within; /* Transmission radii this falls within. */
+} intersect_t;
+
 typedef struct agent {
   agentkind_e kind;       /* Agent type */
-  status_e status;        /* Agent connection status */
   vec3d_t pos;            /* Agent position in 3D space */
   neighbour_t neighbours; /* Linked list of connected neighbours */
   double heading;         /* Optional heading for random walking ground units */
@@ -81,7 +76,7 @@ typedef struct {
   unsigned n;            /* Number of UAVs */
   unsigned m;            /* Number of ground units */
   unsigned nagents;      /* Number of agents for convenience */
-  double ploss_limit;    /* Path loss limit */
+  double dist_limit;     /* Distance limit */
   double z_uav;          /* Fixed z-coordinate of UAVs */
   double scale;          /* Rendering scale */
   vec2d_t screen;        /* Screen resolution scaled */
@@ -93,18 +88,6 @@ typedef struct {
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-static double ploss_d(double distance) {
-  return 20.0 * log10((4 * M_PI / LAMBDA) * distance);
-}
-
-static double inverse_ploss(double ploss) {
-  return pow(10.0, ploss / 20.0) / (4 * M_PI / LAMBDA);
-}
-
-static double ploss(const vec3d_t *p1, const vec3d_t *p2) {
-  return ploss_d(vec3d_dist_r(p1, p2));
-}
 
 static void game_update_scale(gamestate_t *game, double scale) {
   game->scale = scale;
@@ -138,132 +121,14 @@ static void agent_move_towards(agent_t *agent, vec3d_t *to) {
   agent->pos.y += (move_vec.y / mag) * AGENT_VEL * DT;
 }
 
-static void agent_move(agent_t *agent, gamestate_t *game) {
-  agent_t *best_agent;
-  neighbour_t *entry;
-  size_t len;
-  size_t total_vecs;
-  vec3d_t barycenter = VEC3D_SINIT(0.0, 0.0, 0.0);
-  vec3d_t scaled_pos;
-  double best_dist = INFINITY;
-  double dist;
-
-  /* Ground agent movement */
-
-  if (agent->kind == AKIND_GROUND) {
-    if (!game->randwalk) return;
-
-    agent->heading += randval(-HEADING_VARIATION, HEADING_VARIATION);
-    agent->pos.x += AGENT_VEL * DT * sin(agent->heading);
-    agent->pos.y += AGENT_VEL * DT * cos(agent->heading);
-    return;
-  }
-
-  /* Move the UAV according to the algorithm
-   *
-   * Movement choice is as follows:
-   *
-   * - If we are TETHERED/HOP and a leaf node, we should move around the radius
-   *   of our sole neighbour in the direction of other agents within reach, or
-   *   the nearest agent if agents are out of reach. If there are multiple
-   *   agents within reach, pick the one with the highest status or who is a
-   *   ground unit.
-   *
-   * - If we are a TETHERED/HOP agent who is not a leaf, we should try to
-   *   maintain our connected position.
-   *
-   * - If we are an ISOLATED agent, we should move towards the nearest
-   *   non-isolated or ground agent.
-   */
-
-  switch (agent->status) {
-  case STAT_ISOLATED:
-
-    /* Find the nearest non-isolated or ground agent */
-
-    for (unsigned i = 0; i < game->nagents; i++) {
-
-      if (&game->agents[i] == agent) continue; /* Don't pick ourselves */
-
-      if (game->agents[i].kind == AKIND_UAV &&
-          game->agents[i].status == STAT_ISOLATED)
-        continue;
-
-      dist = vec3d_dist_r(&game->agents[i].pos, &agent->pos);
-
-      if (dist < best_dist) {
-        best_agent = &game->agents[i];
-        best_dist = dist;
-      }
-    }
-
-    agent_move_towards(agent, &best_agent->pos);
-    break;
-
-  case STAT_TETHERED:
-  case STAT_HOP:
-
-    /* If we're not a leaf node, move to the barycenter of our neighbours,
-     * restricted however to maintaining any existing connection to a ground
-     * agent.
-     */
-
-    len = list_length(&agent->neighbours.node);
-    if (len > 1) {
-
-      /* Compute the barycenter, giving ground agents significantly more weight.
-       */
-
-      total_vecs = 0;
-      list_for_every_entry(&agent->neighbours.node, entry, neighbour_t, node) {
-        if (entry->agent->kind == AKIND_GROUND) {
-          vec3d_scale(&entry->agent->pos, len, &scaled_pos);
-          total_vecs += len;
-        } else {
-          scaled_pos = entry->agent->pos;
-          total_vecs++;
-        }
-
-        vec3d_add(&barycenter, &scaled_pos, &barycenter);
-      }
-
-      barycenter = vec3d_scale_r(&barycenter, 1.0 / total_vecs);
-      agent_move_towards(agent, &barycenter);
-      break;
-    }
-
-    /* If we are a leaf node, let's stay within our one neighbour's radius and
-     * try to move towards the nearest ground agent.
-     *
-     * NOTE: originally, this rule was to move towards the nearest agent who is
-     * not us or our one neighbour. However, moving towards only ground agents
-     * should improve the number of ground agents we manage to connect and
-     * should be comparable in performance to the original rule (since other
-     * agents would likely be intercepted on the way to a ground agent).
-     */
-
-    for (unsigned i = 0; i < game->nagents; i++) {
-
-      /* Don't pick ourselves or our single neighbour */
-
-      if (game->agents[i].kind != AKIND_GROUND) continue;
-
-      dist = vec3d_dist_r(&game->agents[i].pos, &agent->pos);
-
-      if (dist < best_dist) {
-        best_agent = &game->agents[i];
-        best_dist = dist;
-      }
-    }
-
-    agent_move_towards(agent, &best_agent->pos);
-    break;
-  }
-}
-
 static void game_compute_neighbours(gamestate_t *game) {
   neighbour_t *entry;
   neighbour_t *tmp;
+
+  /* NOTE: the approach taken by this function, of updating everyone's neighbour
+   * list, implies the ideal medium approach where messages are instantaneously
+   * broadcast and received each time this function is called.
+   */
 
   for (unsigned i = 0; i < game->nagents; i++) {
 
@@ -273,7 +138,7 @@ static void game_compute_neighbours(gamestate_t *game) {
 
     list_for_every_entry_safe(&game->agents[i].neighbours.node, entry, tmp,
                               neighbour_t, node) {
-      if (ploss(&game->agents[i].pos, &entry->agent->pos)) {
+      if (vec3d_dist_r(&game->agents[i].pos, &entry->agent->pos)) {
         list_delete(&entry->node);
         free(entry);
       }
@@ -282,8 +147,8 @@ static void game_compute_neighbours(gamestate_t *game) {
     for (unsigned j = 0; j < game->nagents; j++) {
       if (i == j) continue;
 
-      if (ploss(&game->agents[i].pos, &game->agents[j].pos) <
-          game->ploss_limit) {
+      if (vec3d_dist_r(&game->agents[i].pos, &game->agents[j].pos) <
+          game->dist_limit) {
 
         /* If the agent within range is already in the list, then don't add it
          * a second time.
@@ -307,68 +172,26 @@ static void game_compute_neighbours(gamestate_t *game) {
   }
 }
 
-static void game_compute_statuses(gamestate_t *game) {
-  neighbour_t *entry;
-  bool all_isolated;
+static void agent_move(agent_t *agent) {
+  /* Move the agent according to the information it has from its neighbours
+   * messages.
+   */
 
-  for (unsigned i = 0; i < game->nagents; i++) {
+  /* First, compute the intersection points of the agent's neighbours,
+   * pairwise.
+   */
 
-    /* If this agent has no neighbours, it is trivially isolated */
+  /* Now, determine the set of intersection points that yield the greatest
+   * number of new connections (i.e., the points which are within the greatest
+   * number of transmission circles/ranges).
+   */
 
-    if (list_is_empty(&game->agents[i].neighbours.node)) {
-      game->agents[i].status = STAT_ISOLATED;
-      continue;
-    }
-
-    all_isolated = true;
-
-    list_for_every_entry(&game->agents[i].neighbours.node, entry, neighbour_t,
-                         node) {
-
-      /* Neighbour is ground unit, this agent is tethered */
-
-      if (entry->agent->kind == AKIND_GROUND) {
-        game->agents[i].status = STAT_TETHERED;
-        all_isolated = false;
-
-        /* NOTE: We do not inform neighbours that we are tethered. On the next
-         * message passing iteration, they will realize our status was updated.
-         */
-
-        break;
-      }
-
-      /* Neighbour is TETHERED or HOP, this agent is HOP */
-
-      if (entry->agent->status == STAT_TETHERED ||
-          entry->agent->status == STAT_HOP) {
-        switch (game->agents[i].status) {
-        case STAT_ISOLATED:
-        case STAT_HOP:
-          game->agents[i].status = STAT_HOP;
-          all_isolated = false;
-          break;
-        default:
-          break; /* Tethered overrules hop */
-        }
-      }
-    }
-
-    /* If all neighbours are isolated, this agent is isolated */
-
-    if (all_isolated) {
-      game->agents[i].status = STAT_ISOLATED;
-      /* TODO: we need to broadcast when we lose a neighbour that contributes to
-       * our state so our neighbours can update their state accordingly.
-       *
-       * I.e. if we were previously HOP, but we lose connection with our
-       * neighbour that was our connection to a ground agent, we should no
-       * longer be HOP but ISOLATED. However, we may get confused and believe
-       * we're still hop because our other neighbour who is a leaf node was
-       * recorded as HOP because of us.
-       */
-    }
-  }
+  /* Using the set of the optimal intersection points, choose the navigation
+   * point for this agent.
+   *
+   * TODO: do we move towards the average of the optimal points, or do we pick
+   * one to move to?
+   */
 }
 
 static void game_init(gamestate_t *game, SDL_DisplayMode *screen) {
@@ -388,7 +211,6 @@ static void game_init(gamestate_t *game, SDL_DisplayMode *screen) {
     game->agents[i].pos.y = randval(0.5 * game->center.y, 1.5 * game->center.y);
     game->agents[i].pos.z = 0;
     game->agents[i].kind = AKIND_GROUND;
-    game->agents[i].status = STAT_ISOLATED;
     list_initialize(&game->agents[i].neighbours.node);
     if (game->randwalk) {
       game->agents[i].heading = randval(0.0, M_2_PI);
@@ -400,14 +222,16 @@ static void game_init(gamestate_t *game, SDL_DisplayMode *screen) {
     game->agents[i].pos.y = randval(0.5 * game->center.y, 1.5 * game->center.y);
     game->agents[i].pos.z = game->z_uav;
     game->agents[i].kind = AKIND_UAV;
-    game->agents[i].status = STAT_ISOLATED;
     list_initialize(&game->agents[i].neighbours.node);
   }
+
+  /* TODO: if graph is not connected, we need to tweak the initialization so
+   * that agents start connected.
+   */
 
   /* Compute neighbours after init */
 
   game_compute_neighbours(game);
-  game_compute_statuses(game);
 }
 
 static void draw_agents(SDL_Renderer *renderer, agent_t *agents, unsigned n) {
@@ -422,17 +246,7 @@ static void draw_agents(SDL_Renderer *renderer, agent_t *agents, unsigned n) {
     if (agents[i].kind == AKIND_GROUND) {
       SDL_SetRenderDrawColor(renderer, 0, 0xff, 0, SDL_ALPHA_OPAQUE);
     } else {
-      switch (agents[i].status) {
-      case STAT_ISOLATED:
-        SDL_SetRenderDrawColor(renderer, 0xff, 0, 0, SDL_ALPHA_OPAQUE);
-        break;
-      case STAT_HOP:
-        SDL_SetRenderDrawColor(renderer, 0xff, 0, 0xff, SDL_ALPHA_OPAQUE);
-        break;
-      case STAT_TETHERED:
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0xff, SDL_ALPHA_OPAQUE);
-        break;
-      }
+      SDL_SetRenderDrawColor(renderer, 0xff, 0, 0, SDL_ALPHA_OPAQUE);
     }
 
     SDL_RenderFillRect(renderer, &agentbox);
@@ -455,9 +269,18 @@ static void draw_graph(SDL_Renderer *renderer, gamestate_t *game) {
 }
 
 static void draw_radii(SDL_Renderer *renderer, gamestate_t *game) {
-  double radius = inverse_ploss(game->ploss_limit);
-  for (unsigned i = 0; i < game->n; i++) {
-    render_circle(renderer, (vec2d_t *)&game->agents[i].pos, radius,
+  for (unsigned i = 0; i < game->nagents; i++) {
+    if (game->agents[i].kind == AKIND_UAV) {
+      /* Pale red */
+
+      SDL_SetRenderDrawColor(renderer, 0xff, 0x7f, 0x7f, SDL_ALPHA_OPAQUE);
+    } else {
+      /* Pale green */
+
+      SDL_SetRenderDrawColor(renderer, 0x7f, 0xff, 0x7f, SDL_ALPHA_OPAQUE);
+    }
+
+    render_circle(renderer, (vec2d_t *)&game->agents[i].pos, game->dist_limit,
                   CONN_RADIUS_RES);
   }
 }
@@ -480,7 +303,7 @@ int main(int argc, char **argv) {
   /* Initialize game state defaults */
 
   memset(&gamestate, 0, sizeof(gamestate));
-  gamestate.ploss_limit = 65.0;
+  gamestate.dist_limit = 50.0;
   gamestate.z_uav = 10.0;
   gamestate.scale = 4.0;
   gamestate.randwalk = false;
@@ -488,7 +311,7 @@ int main(int argc, char **argv) {
   /* Parse input arguments */
 
   int c;
-  while ((c = getopt(argc, argv, ":hmx:y:s:l:z:r:")) != -1) {
+  while ((c = getopt(argc, argv, ":hmx:y:s:d:z:r:")) != -1) {
     switch (c) {
     case 'h':
       puts(HELP_TEXT);
@@ -503,8 +326,8 @@ int main(int argc, char **argv) {
     case 's':
       gamestate.scale = strtod(optarg, NULL);
       break;
-    case 'l':
-      gamestate.ploss_limit = strtold(optarg, NULL);
+    case 'd':
+      gamestate.dist_limit = strtold(optarg, NULL);
       break;
     case 'z':
       gamestate.z_uav = strtold(optarg, NULL);
@@ -647,12 +470,7 @@ int main(int argc, char **argv) {
 
     /* Perform game updates */
 
-    for (unsigned i = 0; i < gamestate.nagents; i++) {
-      agent_move(&gamestate.agents[i], &gamestate);
-    }
-
     game_compute_neighbours(&gamestate);
-    game_compute_statuses(&gamestate);
 
     /* Do rendering stuff */
 
