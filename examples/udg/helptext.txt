@@ -1,0 +1,30 @@
+Unit Disk Graph
+(c) Matteo Golin 2026
+
+DESCRIPTION:
+    Playing with unit disk graphs.
+
+USAGE:
+    molecules [OPTIONS] n m
+
+OPTIONS:
+    -h          Display this help text.
+    -x <width>  Window width in pixels. Default is half screen width.
+    -y <height> Window height in pixels. Default is half screen height.
+    -s <scale>  Rendering scale. Default 5.
+    -l <limit>  Path loss limit for severed connection in dB. Default 65dB.
+    -z <height> Fixed z-coordinate (altitude) of UAVs. Default 10.0 m.
+    -r <seed>   Random seed to seed the random library with.
+
+ARGUMENTS:
+     n          Number of UAVs.
+     m          Number of ground units.
+
+CONTROLS:
+    This game is visualized using SDL2 and accepts keyboard input.
+
+    q           Quit the game.
+    r           Toggle network connection radii.
+    n           Toggle network connection lines.
+    Space       Reset the game.
+    Esc         Quit the game.
