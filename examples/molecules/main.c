@@ -132,6 +132,9 @@ static void agent_move_towards(agent_t *agent, vec3d_t *to) {
   vec3d_t move_vec;
   double mag;
 
+  assert(!isnan(to->x));
+  assert(!isnan(to->y));
+
   vec3d_sub(to, &agent->pos, &move_vec);
   move_vec.z = 0.0; /* Agents are stuck in planes */
   mag = vec3d_norm_r(&move_vec);
@@ -253,7 +256,7 @@ static bool circle_intersection(vec2d_t *p1, vec2d_t *p2, double r1, double r2,
  * point in space. This results in infinitely many intersection points. This
  * case should be explicitly handled.
  *
- * TODO: agents seems to overdo their movement and when we get to an
+ * TODO: agents seem to overdo their movement and when we get to an
  * intersection point we are unable to maintain it.
  */
 
@@ -265,6 +268,7 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
   vec3d_t toward;
   vec2d_t points[2];
   unsigned nneighbours;
+  unsigned num_best;
 
   /* We'll assume 32 is enough for now; I don't wanna deal with dynamic arrays
    * yet.
@@ -424,6 +428,14 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
    * one to move to?
    *
    * FOR NOW: pick the first one
+   *
+   * I would imagine the average will result in more stable behaviour (we're not
+   * near an extremity and so we can't as easily overshoot). However, we can
+   * also only pick intersection points within the same area, otherwise we're
+   * taking a weighted average /outside/ the convex overlapping and we'll lose
+   * good behaviour. It is a very tricky task to now determine which
+   * intersection points are part of the same Venn diagram. We would maybe have
+   * to start recording the agents that an intersection point belongs to.
    */
 
   agent_move_towards(agent, &intersections[0].pos);
