@@ -22,6 +22,9 @@
 #include "render.h"
 #include "utils.h"
 
+#define STB_DS_IMPLEMENTATION
+#include "stb_ds.h"
+
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -268,14 +271,8 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
   vec3d_t toward;
   vec2d_t points[2];
   unsigned nneighbours;
-  unsigned num_best;
-
-  /* We'll assume 32 is enough for now; I don't wanna deal with dynamic arrays
-   * yet.
-   */
-
-  static intersect_t intersections[64];
-  unsigned count = 0; /* Number of intersection points found so far */
+  intersect_t *intersections = NULL;
+  intersect_t tmp;
 
   if (agent->kind == AKIND_GROUND) {
     if (!randwalk) return;
@@ -296,7 +293,7 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
     agent->heading += randval(-HEADING_VARIATION, HEADING_VARIATION);
     agent->pos.x += AGENT_VEL * DT * cos(agent->heading);
     agent->pos.y += AGENT_VEL * DT * sin(agent->heading);
-    return;
+    goto arr_cleanup;
   }
 
   /* If we only have one neighbour, we should repel away from it (but within the
@@ -334,8 +331,7 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
     }
 
     agent_move_towards(agent, &toward);
-
-    return;
+    goto arr_cleanup;
   }
 
   /* Next, compute the intersection points of the agent's neighbours,
@@ -362,11 +358,10 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
 
       /* Append the first point */
 
-      assert(count < array_len(intersections));
-      intersections[count].pos.x = points[0].x;
-      intersections[count].pos.y = points[0].y;
-      intersections[count].within = 0;
-      count++;
+      tmp.pos.x = points[0].x;
+      tmp.pos.y = points[0].y;
+      tmp.within = 0;
+      arrput(intersections, tmp);
 
       if (fabs(points[0].x - points[1].x) <= 1e-5 &&
           fabs(points[0].y - points[1].y) <= 1e-5) {
@@ -375,11 +370,10 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
 
       /* Otherwise, add the second unique point */
 
-      assert(count < array_len(intersections));
-      intersections[count].pos.x = points[1].x;
-      intersections[count].pos.y = points[1].y;
-      intersections[count].within = 0;
-      count++;
+      tmp.pos.x = points[1].x;
+      tmp.pos.y = points[1].y;
+      tmp.within = 0;
+      arrput(intersections, tmp);
     }
   }
 
@@ -393,10 +387,10 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
    * For now, we will just move towards the first neighbour. TODO: change this.
    */
 
-  if (count == 0) {
+  if (arrlen(intersections) == 0) {
     n1 = list_first_entry(&agent->neighbours.node, neighbour_t, node);
     agent_move_towards(agent, &n1->agent->pos);
-    return;
+    goto arr_cleanup;
   }
 
   /* Now, determine the set of intersection points that yield the greatest
@@ -404,7 +398,7 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
    * number of transmission circles/ranges).
    */
 
-  for (unsigned i = 0; i < count; i++) {
+  for (unsigned i = 0; i < arrlen(intersections); i++) {
     list_for_every_entry(&agent->neighbours.node, n1, neighbour_t, node) {
       /* Check if this point is within this neighbour's transmission radius */
 
@@ -418,7 +412,7 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
 
   /* Sort the intersection points in descending order by `within` field */
 
-  qsort(intersections, array_len(intersections), sizeof(intersections[0]),
+  qsort(intersections, arrlen(intersections), sizeof(intersections[0]),
         intersect_sorter);
 
   /* Using the set of the optimal intersection points, choose the navigation
@@ -439,6 +433,9 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
    */
 
   agent_move_towards(agent, &intersections[0].pos);
+
+arr_cleanup:
+  arrfree(intersections);
 }
 
 static void game_init(gamestate_t *game, SDL_DisplayMode *screen) {
