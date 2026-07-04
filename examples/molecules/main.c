@@ -146,8 +146,19 @@ static void agent_move_towards(agent_t *agent, vec3d_t *to) {
   agent->pos.y += (move_vec.y / mag) * AGENT_VEL * DT;
 }
 
-static void game_compute_neighbours(gamestate_t *game) {
+/* Frees an agent's neighbourhood list */
+
+static void agent_clear_neighbours(agent_t *agent) {
   neighbour_t *entry;
+  neighbour_t *tmp;
+  list_for_every_entry_safe(&agent->neighbours.node, entry, tmp, neighbour_t,
+                            node) {
+    list_delete(&entry->node);
+    free(entry);
+  }
+}
+
+static void game_compute_neighbours(gamestate_t *game) {
   neighbour_t *tmp;
 
   /* NOTE: the approach taken by this function, of updating everyone's neighbour
@@ -164,14 +175,7 @@ static void game_compute_neighbours(gamestate_t *game) {
      * neighbour list from scratch each time.
      */
 
-    list_for_every_entry_safe(&game->agents[i].neighbours.node, entry, tmp,
-                              neighbour_t, node) {
-      if (vec3d_dist_r(&game->agents[i].pos, &entry->agent->pos) >
-          game->trans_radius) {
-        list_delete(&entry->node);
-        free(entry);
-      }
-    }
+    agent_clear_neighbours(&game->agents[i]);
 
     list_initialize(&game->agents[i].neighbours.node);
 
@@ -438,9 +442,15 @@ arr_cleanup:
   arrfree(intersections);
 }
 
-static void game_init(gamestate_t *game, SDL_DisplayMode *screen) {
+static int game_init(gamestate_t *game, SDL_DisplayMode *screen) {
+  game->nagents = game->n + game->m;
   game->screen = (vec2d_t)VEC2D_SINIT((double)screen->w, (double)screen->h);
   game_update_scale(game, game->scale);
+
+  /* Allocate sufficient number of agents */
+
+  game->agents = malloc(sizeof(*game->agents) * game->nagents);
+  if (game->agents == NULL) return errno;
 
   /* Randomly initialize agent positions within the screen size, centered
    * around the middle of the screen.
@@ -476,6 +486,13 @@ static void game_init(gamestate_t *game, SDL_DisplayMode *screen) {
   /* Compute neighbours after init */
 
   game_compute_neighbours(game);
+  return 0;
+}
+
+static void game_free(gamestate_t *game) {
+  for (unsigned i = 0; i < game->nagents; i++) {
+    agent_clear_neighbours(&game->agents[i]);
+  }
 }
 
 static void draw_agents(SDL_Renderer *renderer, agent_t *agents, unsigned n) {
@@ -545,6 +562,7 @@ int main(int argc, char **argv) {
   SDL_DisplayMode tempdm;
   SDL_Event event;
   int randseed = 0;
+  int err;
   bool seed_provided = false;
   bool running = true;
   bool show_network = true;
@@ -622,16 +640,6 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  gamestate.nagents = gamestate.n + gamestate.m;
-
-  /* Allocate sufficient number of agents */
-
-  gamestate.agents = malloc(sizeof(*gamestate.agents) * gamestate.nagents);
-  if (gamestate.agents == NULL) {
-    fprintf(stderr, "Failed to allocate agents: %d\n", errno);
-    exit(EXIT_FAILURE);
-  }
-
   /* Set up OpenGL parameters */
 
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -669,7 +677,11 @@ int main(int argc, char **argv) {
     srand(time(NULL));
   }
 
-  game_init(&gamestate, &dm);
+  err = game_init(&gamestate, &dm);
+  if (err != 0) {
+    fprintf(stderr, "Couldn't initialize game state: %d\n", err);
+    return EXIT_FAILURE;
+  }
 
   /* Simulation loop */
 
@@ -708,7 +720,12 @@ int main(int argc, char **argv) {
           show_radii = !show_radii;
           break;
         case SDLK_SPACE:
-          game_init(&gamestate, &dm);
+          game_free(&gamestate);
+          err = game_init(&gamestate, &dm);
+          if (err != 0) {
+            fprintf(stderr, "Couldn't initialize game state: %d\n", err);
+            return EXIT_FAILURE;
+          }
           break;
         default:
           break;
@@ -761,7 +778,7 @@ int main(int argc, char **argv) {
 
   /* Release resources */
 
-  free(gamestate.agents);
+  game_free(&gamestate);
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();
