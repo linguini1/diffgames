@@ -277,7 +277,7 @@ static bool circle_intersection(vec2d_t *p1, vec2d_t *p2, double r1, double r2,
   double y3;
 
   vec2d_dist(p1, p2, &dist);
-  if (dist > r1 + r2 || iszero(dist)) return false; /* No intersection */
+  if (dist > r1 + r2 || fabs(dist) <= 1e-4) return false; /* No intersection */
 
   /* Adapted from:
    * https://stackoverflow.com/questions/3349125/circle-circle-intersection-points
