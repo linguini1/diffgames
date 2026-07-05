@@ -217,19 +217,23 @@ static bool circle_intersection(vec2d_t *p1, vec2d_t *p2, double r1, double r2,
   double dist;
   double a;
   double h;
+  double test;
   double x3;
   double y3;
 
   vec2d_dist(p1, p2, &dist);
-
-  if (dist > r1 + r2) return false; /* No intersection */
+  if (dist > r1 + r2 || iszero(dist)) return false; /* No intersection */
 
   /* Adapted from:
    * https://stackoverflow.com/questions/3349125/circle-circle-intersection-points
    */
 
   a = (r1 * r1 - r2 * r2 + dist * dist) / (2 * dist);
-  h = sqrt(r1 * r1 - a * a);
+  test = r1 * r1 - a * a;
+
+  if (test < 0) return false; /* No intersection */
+
+  h = sqrt(test);
 
   x3 = p1->x + a * (p2->x - p1->x) / dist;
   y3 = p1->y + a * (p2->y - p1->y) / dist;
@@ -287,7 +291,7 @@ static void intersections_update(intersect_t **intersects, intersect_t new) {
     arrput(*intersects, new);
   }
 
-  return; /* Less than, do nothing */
+  /* Less than, do nothing */
 }
 
 /* Move the agent according to the information it has from its neighbours
