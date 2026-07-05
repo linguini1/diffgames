@@ -207,12 +207,7 @@ static void game_compute_neighbours(gamestate_t *game) {
   }
 }
 
-static int intersect_sorter(const void *a, const void *b) {
-  return ((intersect_t *)(b))->within - ((intersect_t *)(a))->within;
-}
-
-/*
- * Returns false if there is no intersection. If there is an intersection, the
+/* Returns false if there is no intersection. If there is an intersection, the
  * points are returned in the `points` array.
  *
  * One point of intersection will cause both points to have the same value.
@@ -246,6 +241,53 @@ static bool circle_intersection(vec2d_t *p1, vec2d_t *p2, double r1, double r2,
   points[1].y = y3 + h * (p2->x - p1->x) / dist;
 
   return true;
+}
+
+/* Populates the 'within' field of the intersection point and returns it */
+
+static unsigned intersection_within(intersect_t *p, agent_t *agent,
+                                    double trans_radius) {
+  neighbour_t *n1;
+  double r1;
+
+  p->within = 0;
+  list_for_every_entry(&agent->neighbours.node, n1, neighbour_t, node) {
+    /* Check if this point is within this neighbour's transmission radius */
+
+    r1 = projected_radius(trans_radius, n1->agent->pos.z, agent->pos.z);
+    if (vec2d_dist_r((vec2d_t *)&agent->pos, (vec2d_t *)&p->pos) <= r1) {
+      p->within++;
+    }
+  }
+
+  return p->within;
+}
+
+/* Update the intersection list with only those intersections which matter.
+ * NOTE: intersects is an STB dynamic array.
+ *
+ * If the intersections `within` field is equal to the last item in the list,
+ * append it.
+ *
+ * If it is less than, do nothing.
+ *
+ * If it is greater than, clear the list and add the new item to the list.
+ */
+
+static void intersections_update(intersect_t **intersects, intersect_t new) {
+  if (arrlen(*intersects) == 0) {
+    arrput(*intersects, new);
+    return;
+  }
+
+  if (new.within == (*intersects)[0].within) {
+    arrput(*intersects, new);
+  } else if (new.within > (*intersects)[0].within) {
+    arrfree(*intersects);
+    arrput(*intersects, new);
+  }
+
+  return; /* Less than, do nothing */
 }
 
 /* Move the agent according to the information it has from its neighbours
@@ -360,12 +402,12 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
         continue; /* No intersection */
       }
 
-      /* Append the first point */
+      /* Check the first point */
 
       tmp.pos.x = points[0].x;
       tmp.pos.y = points[0].y;
-      tmp.within = 0;
-      arrput(intersections, tmp);
+      intersection_within(&tmp, agent, trans_radius);
+      intersections_update(&intersections, tmp);
 
       if (fabs(points[0].x - points[1].x) <= 1e-5 &&
           fabs(points[0].y - points[1].y) <= 1e-5) {
@@ -376,8 +418,8 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
 
       tmp.pos.x = points[1].x;
       tmp.pos.y = points[1].y;
-      tmp.within = 0;
-      arrput(intersections, tmp);
+      intersection_within(&tmp, agent, trans_radius);
+      intersections_update(&intersections, tmp);
     }
   }
 
@@ -396,28 +438,6 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
     agent_move_towards(agent, &n1->agent->pos);
     goto arr_cleanup;
   }
-
-  /* Now, determine the set of intersection points that yield the greatest
-   * number of new connections (i.e., the points which are within the greatest
-   * number of transmission circles/ranges).
-   */
-
-  for (unsigned i = 0; i < arrlen(intersections); i++) {
-    list_for_every_entry(&agent->neighbours.node, n1, neighbour_t, node) {
-      /* Check if this point is within this neighbour's transmission radius */
-
-      r1 = projected_radius(trans_radius, n1->agent->pos.z, agent->pos.z);
-      if (vec2d_dist_r((vec2d_t *)&agent->pos,
-                       (vec2d_t *)&intersections[i].pos) <= r1) {
-        intersections[i].within++;
-      }
-    }
-  }
-
-  /* Sort the intersection points in descending order by `within` field */
-
-  qsort(intersections, arrlen(intersections), sizeof(intersections[0]),
-        intersect_sorter);
 
   /* Using the set of the optimal intersection points, choose the navigation
    * point for this agent.
