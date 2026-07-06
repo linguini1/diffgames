@@ -248,20 +248,36 @@ static unsigned intersection_within(intersect_t *p, agent_t *agent,
  * If it is greater than, clear the list and add the new item to the list.
  */
 
-static void intersections_update(intersect_t **intersects, intersect_t new) {
-  if (arrlen(*intersects) == 0) {
-    arrput(*intersects, new);
+static void intersections_update(intersect_t **intersections, intersect_t new) {
+  if (arrlen(*intersections) == 0) {
+    arrput(*intersections, new);
     return;
   }
 
-  if (new.within == (*intersects)[0].within) {
-    arrput(*intersects, new);
-  } else if (new.within > (*intersects)[0].within) {
-    arrfree(*intersects);
-    arrput(*intersects, new);
+  if (new.within == (*intersections)[0].within) {
+    arrput(*intersections, new);
+  } else if (new.within > (*intersections)[0].within) {
+    arrfree(*intersections);
+    arrput(*intersections, new);
   }
 
   /* Less than, do nothing */
+}
+
+/* Returns an average of the intersection points in the array */
+
+static vec3d_t intersections_avg(intersect_t **intersections) {
+  vec3d_t avg = VEC3D_SINIT(0.0, 0.0, 0.0);
+  for (unsigned i = 0; i < arrlen(*intersections); i++) {
+    avg.x += (*intersections)[i].pos.x;
+    avg.y += (*intersections)[i].pos.y;
+    avg.z += (*intersections)[i].pos.z;
+  }
+
+  avg.x /= arrlen(*intersections);
+  avg.y /= arrlen(*intersections);
+  avg.z /= arrlen(*intersections);
+  return avg;
 }
 
 static vec3d_t agent_repel_vector(agent_t *agent, vec3d_t *pos,
@@ -439,6 +455,8 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
    * to start recording the agents that an intersection point belongs to.
    */
 
+  // toward = intersections_avg(&intersections);
+  // agent_move_towards(agent, &toward);
   agent_move_towards(agent, &intersections[0].pos);
 
 arr_cleanup:
