@@ -176,37 +176,39 @@ static void game_compute_neighbours(gamestate_t *game) {
   }
 }
 
-/* Find a common neighbour between effective neighbourhoods.
+/* Find a common neighbour between neighbourhoods.
  *
  * NOTE: assumes a1 is always a UAV, but a2 can be any kind of agent.
  */
-static bool agent_common_neighbour(const agent_t *a1, const agent_t *a2,
-                                   unsigned *idx1, unsigned *idx2) {
-  agent_t **hood2;
-
-  if (a2->kind == AKIND_GROUND) {
-    hood2 = a2->neighbours;
-  } else {
-    hood2 = a2->eff_neigh;
-  }
-
-  for (unsigned i = 0; i < arrlen(a1->eff_neigh); i++) {
-    if (a1->eff_neigh[i] == a2) continue; /* Skip comparing agent */
-    for (unsigned j = 0; j < arrlen(hood2); j++) {
+static const agent_t *agent_common_neighbour(const agent_t *a1,
+                                             const agent_t *a2) {
+  for (unsigned i = 0; i < arrlen(a1->neighbours); i++) {
+    if (a1->neighbours[i] == a2) continue; /* Skip comparing agent */
+    for (unsigned j = 0; j < arrlen(a2->neighbours); j++) {
       /* Common neighbour found. Don't count ground units as common neighbours
        * because we want to stay densely connected to them (we don't know how
        * they move).
        */
 
-      if (a1->eff_neigh[i] == hood2[j] && hood2[j]->kind != AKIND_GROUND) {
-        *idx1 = i;
-        *idx2 = j;
-        return true;
+      if (a1->neighbours[i] == a2->neighbours[j] &&
+          a2->neighbours[j]->kind != AKIND_GROUND) {
+        return a1->neighbours[i];
       }
     }
   }
 
-  return false; /* None in common */
+  return NULL; /* None in common */
+}
+
+/* Get index of an agent in a list. */
+
+static ptrdiff_t agent_idx(agent_t ***agents, const agent_t *agent) {
+  for (ptrdiff_t i = 0; i < arrlen(*agents); i++) {
+    if ((*agents)[i] == agent) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 /* Agents will ignore some of their neighbours if they are already
@@ -217,8 +219,8 @@ static bool agent_common_neighbour(const agent_t *a1, const agent_t *a2,
 static void game_negotiate_neighbours(gamestate_t *game) {
   agent_t *agent;
   agent_t *neigh;
-  unsigned idx1;
-  unsigned idx2;
+  const agent_t *common;
+  ptrdiff_t idx;
   double dist1;
   double dist2;
 
@@ -229,36 +231,32 @@ static void game_negotiate_neighbours(gamestate_t *game) {
       continue; /* Ground agents don't negotiate */
     }
 
-    /* Check if we have a neighbour in common. The agent with the most
-     * effective neighbours will drop it.
-     */
+    /* Check if we have a neighbour in common with our other neighbour */
 
-    for (unsigned j = 0; j < arrlen(agent->eff_neigh); j++) {
-      neigh = agent->eff_neigh[j];
+    for (ptrdiff_t j = 0; j < arrlen(agent->neighbours); j++) {
+      neigh = agent->neighbours[j];
 
       /* Whoever is furthest ignores the common neighbour. However,
        * ground agents never ignore common neighbours because we don't track
        * their effective neighbourhood (only UAVs).
        */
 
-      if (!agent_common_neighbour(agent, neigh, &idx1, &idx2)) continue;
+      common = agent_common_neighbour(agent, neigh);
+      if (common == NULL) continue;
 
-      if (neigh->kind == AKIND_GROUND) {
-        arrdel(agent->eff_neigh, idx1);
+      dist1 = vec2d_dist_r((vec2d_t *)&agent->pos, (vec2d_t *)&common->pos);
+      dist2 = vec2d_dist_r((vec2d_t *)&neigh->pos, (vec2d_t *)&common->pos);
+
+      if (neigh->kind == AKIND_GROUND || dist1 > dist2) {
+        idx = agent_idx(&agent->eff_neigh, common);
+        if (idx == -1) continue;
+        arrdelswap(agent->eff_neigh, idx);
         j--; /* Array tail is shifted left, so we stay at this index */
         continue;
-      }
-
-      dist1 = vec2d_dist_r((vec2d_t *)&agent->pos,
-                           (vec2d_t *)&agent->eff_neigh[idx1]->pos);
-      dist2 = vec2d_dist_r((vec2d_t *)&neigh->pos,
-                           (vec2d_t *)&neigh->eff_neigh[idx2]->pos);
-
-      if (dist1 > dist2) {
-        arrdel(agent->eff_neigh, idx1);
-        j--; /* Array tail is shifted left, so we stay at this index */
       } else {
-        arrdel(neigh->eff_neigh, idx2);
+        idx = agent_idx(&neigh->eff_neigh, common);
+        if (idx == -1) continue;
+        arrdelswap(neigh->eff_neigh, idx);
       }
     }
   }
