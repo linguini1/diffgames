@@ -74,6 +74,7 @@ typedef struct agent {
   agentkind_e kind;          /* Agent type */
   vec3d_t pos;               /* Agent position in 3D space */
   struct agent **neighbours; /* Dynamic array of connected neighbours */
+  struct agent **eff_neigh;  /* Effective neighbours (minus ignored) */
   double heading; /* Optional heading for random walking ground units */
 } agent_t;
 
@@ -127,13 +128,6 @@ static void agent_move_towards(agent_t *agent, vec3d_t *to) {
   agent->pos.y += (move_vec.y / mag) * AGENT_VEL * DT;
 }
 
-/* Frees an agent's neighbourhood list */
-
-static void agent_clear_neighbours(agent_t *agent) {
-  arrfree(agent->neighbours);
-  agent->neighbours = NULL;
-}
-
 static void game_compute_neighbours(gamestate_t *game) {
   /* NOTE: the approach taken by this function, of updating everyone's neighbour
    * list, implies the ideal medium approach where messages are instantaneously
@@ -149,7 +143,10 @@ static void game_compute_neighbours(gamestate_t *game) {
      * neighbour list from scratch each time.
      */
 
-    agent_clear_neighbours(&game->agents[i]);
+    arrfree(game->agents[i].neighbours);
+    game->agents[i].neighbours = NULL;
+    arrfree(game->agents[i].eff_neigh);
+    game->agents[i].eff_neigh = NULL;
 
     /* Check all of the neighbours in the existing list of neighbours. If any
      * of them have left the transmission radius, remove them
@@ -166,6 +163,99 @@ static void game_compute_neighbours(gamestate_t *game) {
          */
 
         arrput(game->agents[i].neighbours, &game->agents[j]);
+
+        if (game->agents[i].kind == AKIND_UAV) {
+          /* Ground agents don't need effective neighbours since they do not
+           * have decisions influenced by neighbours
+           */
+
+          arrput(game->agents[i].eff_neigh, &game->agents[j]);
+        }
+      }
+    }
+  }
+}
+
+/* Find a common neighbour between effective neighbourhoods.
+ *
+ * NOTE: assumes a1 is always a UAV, but a2 can be any kind of agent.
+ */
+static bool agent_common_neighbour(const agent_t *a1, const agent_t *a2,
+                                   unsigned *idx1, unsigned *idx2) {
+  agent_t **hood2;
+
+  if (a2->kind == AKIND_GROUND) {
+    hood2 = a2->neighbours;
+  } else {
+    hood2 = a2->eff_neigh;
+  }
+
+  for (unsigned i = 0; i < arrlen(a1->eff_neigh); i++) {
+    if (a1->eff_neigh[i] == a2) continue; /* Skip comparing agent */
+    for (unsigned j = 0; j < arrlen(hood2); j++) {
+      /* Common neighbour found */
+
+      if (a1->eff_neigh[i] == hood2[j]) {
+        *idx1 = i;
+        *idx2 = j;
+        return true;
+      }
+    }
+  }
+
+  return false; /* None in common */
+}
+
+/* Agents will ignore some of their neighbours if they are already
+ * well-connected so that we can maximize spreading out to gain more new
+ * connections.
+ */
+
+static void game_negotiate_neighbours(gamestate_t *game) {
+  agent_t *agent;
+  agent_t *neigh;
+  unsigned idx1;
+  unsigned idx2;
+  double dist1;
+  double dist2;
+
+  for (unsigned i = 0; i < game->nagents; i++) {
+    agent = &game->agents[i];
+
+    if (agent->kind == AKIND_GROUND) {
+      continue; /* Ground agents don't negotiate */
+    }
+
+    /* Check if we have a neighbour in common. The agent with the most
+     * effective neighbours will drop it.
+     */
+
+    for (unsigned j = 0; j < arrlen(agent->eff_neigh); j++) {
+      neigh = agent->eff_neigh[j];
+
+      /* Whoever is furthest ignores the common neighbour. However,
+       * ground agents never ignore common neighbours because we don't track
+       * their effective neighbourhood (only UAVs).
+       */
+
+      if (!agent_common_neighbour(agent, neigh, &idx1, &idx2)) continue;
+
+      if (neigh->kind == AKIND_GROUND) {
+        arrdel(agent->eff_neigh, idx1);
+        j--; /* Array tail is shifted left, so we stay at this index */
+        continue;
+      }
+
+      dist1 = vec2d_dist_r((vec2d_t *)&agent->pos,
+                           (vec2d_t *)&agent->eff_neigh[idx1]->pos);
+      dist2 = vec2d_dist_r((vec2d_t *)&neigh->pos,
+                           (vec2d_t *)&neigh->eff_neigh[idx2]->pos);
+
+      if (dist1 > dist2) {
+        arrdel(agent->eff_neigh, idx1);
+        j--; /* Array tail is shifted left, so we stay at this index */
+      } else {
+        arrdel(neigh->eff_neigh, idx2);
       }
     }
   }
@@ -223,13 +313,13 @@ static unsigned intersection_within(intersect_t *p, agent_t *agent,
   double r1;
 
   p->within = 0;
-  for (unsigned i = 0; i < arrlen(agent->neighbours); i++) {
+  for (unsigned i = 0; i < arrlen(agent->eff_neigh); i++) {
     /* Check if this point is within this neighbour's transmission radius */
 
-    r1 = projected_radius(trans_radius, agent->neighbours[i]->pos.z,
+    r1 = projected_radius(trans_radius, agent->eff_neigh[i]->pos.z,
                           agent->pos.z);
     if (vec2d_dist_r((vec2d_t *)&p->pos,
-                     (vec2d_t *)&agent->neighbours[i]->pos) <= r1) {
+                     (vec2d_t *)&agent->eff_neigh[i]->pos) <= r1) {
       p->within++;
     }
   }
@@ -335,7 +425,7 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
    * randomly.
    */
 
-  if (arrlen(agent->neighbours) == 0) {
+  if (arrlen(agent->eff_neigh) == 0) {
     agent->heading += randval(-HEADING_VARIATION, HEADING_VARIATION);
     agent->pos.x += AGENT_VEL * DT * cos(agent->heading);
     agent->pos.y += AGENT_VEL * DT * sin(agent->heading);
@@ -350,22 +440,21 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
    * extremity. We then move to that point.
    */
 
-  if (arrlen(agent->neighbours) == 1) {
-    toward =
-        agent_repel_vector(agent, &agent->neighbours[0]->pos, trans_radius);
+  if (arrlen(agent->eff_neigh) == 1) {
+    toward = agent_repel_vector(agent, &agent->eff_neigh[0]->pos, trans_radius);
 
     /* If we are already on the radius, we should now rotate around our
      * neighbour by following the tangent vector.
      */
 
     if (vec2d_dist_r((vec2d_t *)&toward, (vec2d_t *)&agent->pos) <= 0.4) {
-      r1 = projected_radius(trans_radius, agent->neighbours[0]->pos.z,
+      r1 = projected_radius(trans_radius, agent->eff_neigh[0]->pos.z,
                             agent->pos.z);
-      vec2d_sub(&agent->pos, &agent->neighbours[0]->pos, &toward);
+      vec2d_sub(&agent->pos, &agent->eff_neigh[0]->pos, &toward);
       r2 = atan2(toward.y, toward.x);
       r2 += 0.1; /* Increase by 0.1 radians to spin */
-      toward.x = agent->neighbours[0]->pos.x + r1 * cos(r2);
-      toward.y = agent->neighbours[0]->pos.y + r1 * sin(r2);
+      toward.x = agent->eff_neigh[0]->pos.x + r1 * cos(r2);
+      toward.y = agent->eff_neigh[0]->pos.y + r1 * sin(r2);
     }
 
     agent_move_towards(agent, &toward);
@@ -376,26 +465,26 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
    * pairwise.
    */
 
-  for (unsigned i = 0; i < arrlen(agent->neighbours); i++) {
-    for (unsigned j = 0; j < arrlen(agent->neighbours); j++) {
+  for (unsigned i = 0; i < arrlen(agent->eff_neigh); i++) {
+    for (unsigned j = 0; j < arrlen(agent->eff_neigh); j++) {
 
       /* Skip agents who are the same */
 
-      if (agent->neighbours[i] == agent->neighbours[j]) continue;
+      if (agent->eff_neigh[i] == agent->eff_neigh[j]) continue;
 
       /* Determine intersection point(s) of the transmission radii in this
-       * agent's z-plane using the position of the neighbours.
+       * agent's z-plane using the position of the eff_neigh.
        */
 
       /* Project transmission radii to the plane of the moving agent */
 
-      r1 = projected_radius(trans_radius, agent->neighbours[i]->pos.z,
+      r1 = projected_radius(trans_radius, agent->eff_neigh[i]->pos.z,
                             agent->pos.z);
-      r2 = projected_radius(trans_radius, agent->neighbours[j]->pos.z,
+      r2 = projected_radius(trans_radius, agent->eff_neigh[j]->pos.z,
                             agent->pos.z);
 
-      if (!circle_intersection((vec2d_t *)&agent->neighbours[i]->pos,
-                               (vec2d_t *)&agent->neighbours[j]->pos, r1, r2,
+      if (!circle_intersection((vec2d_t *)&agent->eff_neigh[i]->pos,
+                               (vec2d_t *)&agent->eff_neigh[j]->pos, r1, r2,
                                points)) {
         continue; /* No intersection */
       }
@@ -432,8 +521,7 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
      * stopped by the limit of their radius.
      */
 
-    toward =
-        agent_repel_vector(agent, &agent->neighbours[0]->pos, trans_radius);
+    toward = agent_repel_vector(agent, &agent->eff_neigh[0]->pos, trans_radius);
     agent_move_towards(agent, &toward);
     goto arr_cleanup;
   }
@@ -487,6 +575,7 @@ static int game_init(gamestate_t *game, SDL_DisplayMode *screen) {
     game->agents[i].pos.z = 0;
     game->agents[i].kind = AKIND_GROUND;
     game->agents[i].neighbours = NULL;
+    game->agents[i].eff_neigh = NULL;
     if (game->randwalk) {
       game->agents[i].heading = randval(0.0, M_2_PI);
     }
@@ -498,6 +587,7 @@ static int game_init(gamestate_t *game, SDL_DisplayMode *screen) {
     game->agents[i].pos.z = game->z_uav;
     game->agents[i].kind = AKIND_UAV;
     game->agents[i].neighbours = NULL;
+    game->agents[i].eff_neigh = NULL;
   }
 
   /* TODO: if graph is not connected, we need to tweak the initialization so
@@ -507,12 +597,16 @@ static int game_init(gamestate_t *game, SDL_DisplayMode *screen) {
   /* Compute neighbours after init */
 
   game_compute_neighbours(game);
+  game_negotiate_neighbours(game);
   return 0;
 }
 
 static void game_free(gamestate_t *game) {
   for (unsigned i = 0; i < game->nagents; i++) {
-    agent_clear_neighbours(&game->agents[i]);
+    arrfree(game->agents[i].neighbours);
+    game->agents[i].neighbours = NULL;
+    arrfree(game->agents[i].eff_neigh);
+    game->agents[i].eff_neigh = NULL;
   }
 }
 
@@ -633,7 +727,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  gamestate.eff_radius = gamestate.trans_radius * 0.95;
+  gamestate.eff_radius = gamestate.trans_radius * 0.9;
 
   /* Parse positional arguments */
 
@@ -758,12 +852,13 @@ int main(int argc, char **argv) {
 
     /* Perform game updates */
 
+    game_compute_neighbours(&gamestate);
+    game_negotiate_neighbours(&gamestate);
+
     for (unsigned i = 0; i < gamestate.nagents; i++) {
       agent_move(&gamestate.agents[i], gamestate.eff_radius,
                  gamestate.randwalk);
     }
-
-    game_compute_neighbours(&gamestate);
 
     /* Do rendering stuff */
 
