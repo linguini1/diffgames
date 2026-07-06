@@ -211,7 +211,12 @@ static bool circle_intersection(vec2d_t *p1, vec2d_t *p2, double r1, double r2,
   return true;
 }
 
-/* Populates the 'within' field of the intersection point and returns it */
+/* Populates the 'within' field of the intersection point and returns it
+ *
+ * NOTE: if we do anything to make ground agent intersection points worth more,
+ * we can no longer take advantage of the convex overlapping area with a
+ * weighted average.
+ */
 
 static unsigned intersection_within(intersect_t *p, agent_t *agent,
                                     double trans_radius) {
@@ -223,7 +228,8 @@ static unsigned intersection_within(intersect_t *p, agent_t *agent,
 
     r1 = projected_radius(trans_radius, agent->neighbours[i]->pos.z,
                           agent->pos.z);
-    if (vec2d_dist_r((vec2d_t *)&agent->pos, (vec2d_t *)&p->pos) <= r1) {
+    if (vec2d_dist_r((vec2d_t *)&p->pos,
+                     (vec2d_t *)&agent->neighbours[i]->pos) <= r1) {
       p->within++;
     }
   }
