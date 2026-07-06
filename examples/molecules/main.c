@@ -193,9 +193,12 @@ static bool agent_common_neighbour(const agent_t *a1, const agent_t *a2,
   for (unsigned i = 0; i < arrlen(a1->eff_neigh); i++) {
     if (a1->eff_neigh[i] == a2) continue; /* Skip comparing agent */
     for (unsigned j = 0; j < arrlen(hood2); j++) {
-      /* Common neighbour found */
+      /* Common neighbour found. Don't count ground units as common neighbours
+       * because we want to stay densely connected to them (we don't know how
+       * they move).
+       */
 
-      if (a1->eff_neigh[i] == hood2[j]) {
+      if (a1->eff_neigh[i] == hood2[j] && hood2[j]->kind != AKIND_GROUND) {
         *idx1 = i;
         *idx2 = j;
         return true;
@@ -400,8 +403,7 @@ static vec3d_t agent_repel_vector(agent_t *agent, vec3d_t *pos,
  * point in space. This results in infinitely many intersection points. This
  * case should be explicitly handled.
  *
- * TODO: agents seem to overdo their movement and when we get to an
- * intersection point we are unable to maintain it.
+ * TODO: Movement is still quite jittery.
  */
 
 static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
