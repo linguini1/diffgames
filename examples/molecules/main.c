@@ -18,7 +18,6 @@
 #include "3dtools.h"
 #include "SDL_render.h"
 #include "helptext.h"
-#include "list.h"
 #include "render.h"
 #include "utils.h"
 
@@ -56,11 +55,6 @@ typedef enum {
   AKIND_UAV,    /* UAV */
 } agentkind_e;
 
-typedef struct neighbour {
-  struct list_node node; /* Linked list node */
-  struct agent *agent;   /* An agent in this neighbourhood */
-} neighbour_t;
-
 /* An intersection point of 2 transmission radii.
  *
  * NOTE: we are dealing with intersections of spheres. When we check their
@@ -77,10 +71,10 @@ typedef struct {
 } intersect_t;
 
 typedef struct agent {
-  agentkind_e kind;       /* Agent type */
-  vec3d_t pos;            /* Agent position in 3D space */
-  neighbour_t neighbours; /* Linked list of connected neighbours */
-  double heading;         /* Optional heading for random walking ground units */
+  agentkind_e kind;          /* Agent type */
+  vec3d_t pos;               /* Agent position in 3D space */
+  struct agent **neighbours; /* Dynamic array of connected neighbours */
+  double heading; /* Optional heading for random walking ground units */
 } agent_t;
 
 typedef struct {
@@ -118,19 +112,6 @@ static void game_update_scale(gamestate_t *game, double scale) {
                                       game->screen_scaled.y / 2.0);
 }
 
-static bool agent_is_neighbour_of(const agent_t *potential,
-                                  const agent_t *agent) {
-  neighbour_t *entry;
-
-  list_for_every_entry(&agent->neighbours.node, entry, neighbour_t, node) {
-    if (entry->agent == potential) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 static void agent_move_towards(agent_t *agent, vec3d_t *to) {
   vec3d_t move_vec;
   double mag;
@@ -149,18 +130,11 @@ static void agent_move_towards(agent_t *agent, vec3d_t *to) {
 /* Frees an agent's neighbourhood list */
 
 static void agent_clear_neighbours(agent_t *agent) {
-  neighbour_t *entry;
-  neighbour_t *tmp;
-  list_for_every_entry_safe(&agent->neighbours.node, entry, tmp, neighbour_t,
-                            node) {
-    list_delete(&entry->node);
-    free(entry);
-  }
+  arrfree(agent->neighbours);
+  agent->neighbours = NULL;
 }
 
 static void game_compute_neighbours(gamestate_t *game) {
-  neighbour_t *tmp;
-
   /* NOTE: the approach taken by this function, of updating everyone's neighbour
    * list, implies the ideal medium approach where messages are instantaneously
    * broadcast and received each time this function is called.
@@ -177,8 +151,6 @@ static void game_compute_neighbours(gamestate_t *game) {
 
     agent_clear_neighbours(&game->agents[i]);
 
-    list_initialize(&game->agents[i].neighbours.node);
-
     /* Check all of the neighbours in the existing list of neighbours. If any
      * of them have left the transmission radius, remove them
      */
@@ -193,15 +165,7 @@ static void game_compute_neighbours(gamestate_t *game) {
          * add to the list.
          */
 
-        tmp = malloc(sizeof(neighbour_t));
-        if (tmp == NULL) {
-          fprintf(stderr, "Buy more RAM: %d!\n", errno);
-          return;
-        }
-
-        list_initialize(&tmp->node);
-        tmp->agent = &game->agents[j];
-        list_add_after(&game->agents[i].neighbours.node, &tmp->node);
+        arrput(game->agents[i].neighbours, &game->agents[j]);
       }
     }
   }
@@ -251,14 +215,14 @@ static bool circle_intersection(vec2d_t *p1, vec2d_t *p2, double r1, double r2,
 
 static unsigned intersection_within(intersect_t *p, agent_t *agent,
                                     double trans_radius) {
-  neighbour_t *n1;
   double r1;
 
   p->within = 0;
-  list_for_every_entry(&agent->neighbours.node, n1, neighbour_t, node) {
+  for (unsigned i = 0; i < arrlen(agent->neighbours); i++) {
     /* Check if this point is within this neighbour's transmission radius */
 
-    r1 = projected_radius(trans_radius, n1->agent->pos.z, agent->pos.z);
+    r1 = projected_radius(trans_radius, agent->neighbours[i]->pos.z,
+                          agent->pos.z);
     if (vec2d_dist_r((vec2d_t *)&agent->pos, (vec2d_t *)&p->pos) <= r1) {
       p->within++;
     }
@@ -329,13 +293,10 @@ static vec3d_t agent_repel_vector(agent_t *agent, vec3d_t *pos,
  */
 
 static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
-  neighbour_t *n1;
-  neighbour_t *n2;
   double r1;
   double r2;
   vec3d_t toward;
   vec2d_t points[2];
-  unsigned nneighbours;
   intersect_t *intersections = NULL;
   intersect_t tmp;
 
@@ -348,13 +309,11 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
     return;
   }
 
-  nneighbours = list_length(&agent->neighbours.node);
-
   /* If this agent has no neighbours, then we should just move somewhere
    * randomly.
    */
 
-  if (nneighbours == 0) {
+  if (arrlen(agent->neighbours) == 0) {
     agent->heading += randval(-HEADING_VARIATION, HEADING_VARIATION);
     agent->pos.x += AGENT_VEL * DT * cos(agent->heading);
     agent->pos.y += AGENT_VEL * DT * sin(agent->heading);
@@ -369,21 +328,22 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
    * extremity. We then move to that point.
    */
 
-  if (nneighbours == 1) {
-    n1 = list_first_entry(&agent->neighbours.node, neighbour_t, node);
-    toward = agent_repel_vector(agent, &n1->agent->pos, trans_radius);
+  if (arrlen(agent->neighbours) == 1) {
+    toward =
+        agent_repel_vector(agent, &agent->neighbours[0]->pos, trans_radius);
 
     /* If we are already on the radius, we should now rotate around our
      * neighbour by following the tangent vector.
      */
 
     if (vec2d_dist_r((vec2d_t *)&toward, (vec2d_t *)&agent->pos) <= 0.4) {
-      r1 = projected_radius(trans_radius, n1->agent->pos.z, agent->pos.z);
-      vec2d_sub(&agent->pos, &n1->agent->pos, &toward);
+      r1 = projected_radius(trans_radius, agent->neighbours[0]->pos.z,
+                            agent->pos.z);
+      vec2d_sub(&agent->pos, &agent->neighbours[0]->pos, &toward);
       r2 = atan2(toward.y, toward.x);
       r2 += 0.1; /* Increase by 0.1 radians to spin */
-      toward.x = n1->agent->pos.x + r1 * cos(r2);
-      toward.y = n1->agent->pos.y + r1 * sin(r2);
+      toward.x = agent->neighbours[0]->pos.x + r1 * cos(r2);
+      toward.y = agent->neighbours[0]->pos.y + r1 * sin(r2);
     }
 
     agent_move_towards(agent, &toward);
@@ -394,9 +354,12 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
    * pairwise.
    */
 
-  list_for_every_entry(&agent->neighbours.node, n1, neighbour_t, node) {
-    list_for_every_entry(&agent->neighbours.node, n2, neighbour_t, node) {
-      if (n1->agent == n2->agent) continue; /* Skip agents who are the same */
+  for (unsigned i = 0; i < arrlen(agent->neighbours); i++) {
+    for (unsigned j = 0; j < arrlen(agent->neighbours); j++) {
+
+      /* Skip agents who are the same */
+
+      if (agent->neighbours[i] == agent->neighbours[j]) continue;
 
       /* Determine intersection point(s) of the transmission radii in this
        * agent's z-plane using the position of the neighbours.
@@ -404,11 +367,14 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
 
       /* Project transmission radii to the plane of the moving agent */
 
-      r1 = projected_radius(trans_radius, n1->agent->pos.z, agent->pos.z);
-      r2 = projected_radius(trans_radius, n2->agent->pos.z, agent->pos.z);
+      r1 = projected_radius(trans_radius, agent->neighbours[i]->pos.z,
+                            agent->pos.z);
+      r2 = projected_radius(trans_radius, agent->neighbours[j]->pos.z,
+                            agent->pos.z);
 
-      if (!circle_intersection((vec2d_t *)&n1->agent->pos,
-                               (vec2d_t *)&n2->agent->pos, r1, r2, points)) {
+      if (!circle_intersection((vec2d_t *)&agent->neighbours[i]->pos,
+                               (vec2d_t *)&agent->neighbours[j]->pos, r1, r2,
+                               points)) {
         continue; /* No intersection */
       }
 
@@ -440,13 +406,12 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
    */
 
   if (arrlen(intersections) == 0) {
-    n1 = list_first_entry(&agent->neighbours.node, neighbour_t, node);
-
     /* Determine the vector to the neighbour, move in the opposite direction,
      * stopped by the limit of their radius.
      */
 
-    toward = agent_repel_vector(agent, &n1->agent->pos, trans_radius);
+    toward =
+        agent_repel_vector(agent, &agent->neighbours[0]->pos, trans_radius);
     agent_move_towards(agent, &toward);
     goto arr_cleanup;
   }
@@ -497,7 +462,7 @@ static int game_init(gamestate_t *game, SDL_DisplayMode *screen) {
     game->agents[i].pos.y = randval(0.5 * game->center.y, 1.5 * game->center.y);
     game->agents[i].pos.z = 0;
     game->agents[i].kind = AKIND_GROUND;
-    list_initialize(&game->agents[i].neighbours.node);
+    game->agents[i].neighbours = NULL;
     if (game->randwalk) {
       game->agents[i].heading = randval(0.0, M_2_PI);
     }
@@ -508,7 +473,7 @@ static int game_init(gamestate_t *game, SDL_DisplayMode *screen) {
     game->agents[i].pos.y = randval(0.5 * game->center.y, 1.5 * game->center.y);
     game->agents[i].pos.z = game->z_uav;
     game->agents[i].kind = AKIND_UAV;
-    list_initialize(&game->agents[i].neighbours.node);
+    game->agents[i].neighbours = NULL;
   }
 
   /* TODO: if graph is not connected, we need to tweak the initialization so
@@ -547,16 +512,14 @@ static void draw_agents(SDL_Renderer *renderer, agent_t *agents, unsigned n) {
 }
 
 static void draw_graph(SDL_Renderer *renderer, gamestate_t *game) {
-  neighbour_t *entry;
-
   /* For each agent, draw its connections to its neighbours from its
    * neighbourhood list
    */
 
   for (unsigned i = 0; i < game->nagents; i++) {
-    list_for_every_entry(&game->agents[i].neighbours.node, entry, neighbour_t,
-                         node) {
-      render_line(renderer, &game->agents[i].pos, &entry->agent->pos);
+    for (unsigned j = 0; j < arrlen(game->agents[i].neighbours); j++) {
+      render_line(renderer, &game->agents[i].pos,
+                  &game->agents[i].neighbours[j]->pos);
     }
   }
 }
