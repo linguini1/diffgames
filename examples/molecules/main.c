@@ -294,6 +294,21 @@ static void intersections_update(intersect_t **intersects, intersect_t new) {
   /* Less than, do nothing */
 }
 
+static vec3d_t agent_repel_vector(agent_t *agent, vec3d_t *pos,
+                                  double trans_radius) {
+  vec3d_t toward;
+  double r1;
+  double r2;
+
+  vec2d_sub(&agent->pos, pos, &toward);
+  r1 = projected_radius(trans_radius, pos->z, agent->pos.z);
+  r2 = vec2d_norm_r((vec2d_t *)&toward); /* Distance to pos */
+  vec2d_scale(&toward, r1 / r2, &toward);
+  vec2d_add(&toward, pos, &toward);
+  toward.z = agent->pos.z; /* Stay within plane */
+  return toward;
+}
+
 /* Move the agent according to the information it has from its neighbours
  * messages. `trans_radius` is the transmission distance set by the game
  * globally.
@@ -356,23 +371,14 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
 
   if (nneighbours == 1) {
     n1 = list_first_entry(&agent->neighbours.node, neighbour_t, node);
-    vec2d_sub(&agent->pos, &n1->agent->pos, &toward);
-    r1 = projected_radius(trans_radius, n1->agent->pos.z, agent->pos.z);
-    r2 = vec2d_norm_r((vec2d_t *)&toward); /* r2 holds distance to neighbour */
-
-    /* Scale by the remaining radius and then offset by neighbour position to
-     * make it once again an absolute position instead of a relative vector.
-     */
-
-    vec2d_scale(&toward, r1 / r2, &toward);
-    vec2d_add(&toward, &n1->agent->pos, &toward);
-    toward.z = agent->pos.z; /* Stay within the plane */
+    toward = agent_repel_vector(agent, &n1->agent->pos, trans_radius);
 
     /* If we are already on the radius, we should now rotate around our
      * neighbour by following the tangent vector.
      */
 
     if (vec2d_dist_r((vec2d_t *)&toward, (vec2d_t *)&agent->pos) <= 0.4) {
+      r1 = projected_radius(trans_radius, n1->agent->pos.z, agent->pos.z);
       vec2d_sub(&agent->pos, &n1->agent->pos, &toward);
       r2 = atan2(toward.y, toward.x);
       r2 += 0.1; /* Increase by 0.1 radians to spin */
@@ -427,19 +433,21 @@ static void agent_move(agent_t *agent, double trans_radius, bool randwalk) {
     }
   }
 
-  /* TODO: if there are no intersection points (possible, all neighbouring
+  /* If there are no intersection points (possible, all neighbouring
    * agents' transmission radii are subsets of this agent's transmission
-   * radius), we need to decide what to do.
-   *
-   * Should we move in a direction such that our furthest neighbour is pushed
+   * radius) we move in a direction such that our furthest neighbour is pushed
    * towards the extremity of our radius?
-   *
-   * For now, we will just move towards the first neighbour. TODO: change this.
    */
 
   if (arrlen(intersections) == 0) {
     n1 = list_first_entry(&agent->neighbours.node, neighbour_t, node);
-    agent_move_towards(agent, &n1->agent->pos);
+
+    /* Determine the vector to the neighbour, move in the opposite direction,
+     * stopped by the limit of their radius.
+     */
+
+    toward = agent_repel_vector(agent, &n1->agent->pos, trans_radius);
+    agent_move_towards(agent, &toward);
     goto arr_cleanup;
   }
 
