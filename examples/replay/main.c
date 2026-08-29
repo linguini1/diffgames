@@ -417,7 +417,12 @@ void render_graph(SDL_Renderer *renderer, agent_t *agents, size_t n, size_t m,
   /* Draw graph connections in white to the window renderer */
 
   SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-  for (size_t i = 0; i < n; i++) {
+
+  /* NOTE: When rendering, we assume that each agent can be connected to each
+   * other agent (i.e., evader-evader pairings are now allowed)
+   */
+
+  for (size_t i = 0; i < n + m; i++) {
     for (size_t j = 0; j < n + m; j++) {
       if (i == j) continue; /* No self-self considerations */
 

@@ -23,7 +23,8 @@ CFLAGS += -I $(SDLTTF_PATH)/include
 CFLAGS += -I $(SDLTTF_PATH)/include/SDL2
 CFLAGS += -L $(SDLTTF_PATH)/lib
 CFLAGS += -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf
-CFLAGS += -lgsl -lgslcblas -lm
+CFLAGS += -lm
+# CFLAGS += -lgsl -lgslcblas -lm
 else
 CFLAGS += $(shell sdl2-config --cflags --libs)
 CFLAGS += -lSDL2_ttf # SDL2 TTF library
