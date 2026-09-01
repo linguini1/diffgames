@@ -30,6 +30,12 @@ static double ploss(const agent_t *a1, const agent_t *a2) {
   return 20.0 * log10((4 * M_PI / LAMBDA) * vec3d_dist_r(&a1->pos, &a2->pos));
 }
 
+static char *parse_param(char *line) {
+  char *token = strtok(line, "=");
+  if (token == NULL) return token;
+  return strtok(NULL, "=");
+}
+
 void render_agents(SDL_Renderer *renderer, agent_t *agents, size_t n, size_t m,
                    vec2d_t *screen_offset, double scale);
 void render_graph(SDL_Renderer *renderer, agent_t *agents, size_t n, size_t m,
@@ -112,38 +118,52 @@ int main(int argc, char **argv) {
   }
 
   /* Get simulation parameters needed for rendering from the simulation file:
-   * n, m loss threshold (dB), bounded play region
    * TODO: no error handling,
    */
 
-  fgets(buf, sizeof(buf), file);
+  char *token;
 
-  char *token = strtok(buf, ",");
+  fgets(buf, sizeof(buf), file);
+  token = parse_param(buf);
   if (token == NULL) {
     fprintf(stderr, "Expected token for 'n', got nothing.\n");
     return EXIT_FAILURE;
   }
   n = strtoul(token, NULL, 10);
 
-  token = strtok(NULL, ",");
+  fgets(buf, sizeof(buf), file);
+  token = parse_param(buf);
   if (token == NULL) {
     fprintf(stderr, "Expected token for 'm', got nothing.\n");
     return EXIT_FAILURE;
   }
   m = strtoul(token, NULL, 10);
 
-  token = strtok(NULL, ",");
+  fgets(buf, sizeof(buf), file);
+  token = parse_param(buf);
+  if (token == NULL) {
+    fprintf(stderr,
+            "Expected token for r_max for this simulation, skipping render.\n");
+    return EXIT_FAILURE;
+  }
+  r_max = strtold(token, NULL);
+
+  /* Skip z_ground, z_uav */
+
+  fgets(buf, sizeof(buf), file);
+  fgets(buf, sizeof(buf), file);
+
+  fgets(buf, sizeof(buf), file);
+  token = parse_param(buf);
   if (isnan(ploss_limit) && token != NULL) {
     ploss_limit = strtold(token, NULL);
   }
 
-  token = strtok(NULL, ",");
-  if (token != NULL) {
-    r_max = strtold(token, NULL);
-  } else {
-    fprintf(stderr,
-            "Warning: No r_max for this simulation, skipping render.\n");
-  }
+  /* Skip dt, weight, kron */
+
+  fgets(buf, sizeof(buf), file);
+  fgets(buf, sizeof(buf), file);
+  fgets(buf, sizeof(buf), file);
 
   if (n <= 0 || m <= 0) {
     fprintf(stderr, "Invalid premise, n or m is <= 0\n");
