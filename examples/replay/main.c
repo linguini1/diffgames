@@ -19,8 +19,8 @@ const char WINDOW_NAME[] = "Replay";
 const SDL_Colour BLACK = {0, 0, 0, SDL_ALPHA_OPAQUE};
 const SDL_Colour WHITE = {255, 255, 255, SDL_ALPHA_OPAQUE};
 
-static SDL_Colour bgcol = BLACK;
-static SDL_Colour fgcol = WHITE;
+static SDL_Colour bgcol;
+static SDL_Colour fgcol;
 
 #define LAMBDA (0.32764203)
 
@@ -73,6 +73,9 @@ int main(int argc, char **argv) {
   vec2d_t comb_offset;
   int mouse_x;
   int mouse_y;
+
+  bgcol = BLACK;
+  fgcol = WHITE;
 
   int c;
   while ((c = getopt(argc, argv, ":hx:y:s:f:t:l:e")) != -1) {
