@@ -16,6 +16,11 @@
 #include "utils.h"
 
 const char WINDOW_NAME[] = "Replay";
+const SDL_Colour BLACK = {0, 0, 0, SDL_ALPHA_OPAQUE};
+const SDL_Colour WHITE = {255, 255, 255, SDL_ALPHA_OPAQUE};
+
+static SDL_Colour bgcol = BLACK;
+static SDL_Colour fgcol = WHITE;
 
 #define LAMBDA (0.32764203)
 
@@ -264,6 +269,15 @@ int main(int argc, char **argv) {
         case SDLK_p:
           paused = !paused;
           break;
+        case SDLK_i:
+          if (bgcol.r == 0) {
+            bgcol = WHITE;
+            fgcol = BLACK;
+          } else {
+            bgcol = BLACK;
+            fgcol = WHITE;
+          }
+          break;
         case SDLK_n:
           show_network = !show_network;
           break;
@@ -271,7 +285,7 @@ int main(int argc, char **argv) {
           fseek(file, 0, SEEK_SET);
           fgets(buf, sizeof(buf), file); /* Skip headers */
           game_over = false;
-          SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+          SDL_SetRenderDrawColor(renderer, bgcol.r, bgcol.g, bgcol.b, bgcol.a);
           SDL_SetRenderTarget(renderer, agent_txtr); /* Clear agents */
           SDL_RenderClear(renderer);
           SDL_SetRenderTarget(renderer, NULL); /* Clear window */
@@ -318,7 +332,7 @@ int main(int argc, char **argv) {
 
       SDL_SetRenderTarget(renderer, agent_txtr); /* Switch to agent texture */
 
-      SDL_SetRenderDrawColor(renderer, 0, 0, 0, 10);
+      SDL_SetRenderDrawColor(renderer, bgcol.r, bgcol.g, bgcol.b, 10);
       SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
       SDL_RenderFillRect(renderer, &fullscreen);
 
@@ -328,7 +342,7 @@ int main(int argc, char **argv) {
       /* Clear window renderer entirely with black */
 
       SDL_SetRenderTarget(renderer, NULL);
-      SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+      SDL_SetRenderDrawColor(renderer, bgcol.r, bgcol.g, bgcol.b, bgcol.a);
       SDL_RenderClear(renderer);
 
       /* Copy over agent render on top of the graph render */
@@ -337,7 +351,7 @@ int main(int argc, char **argv) {
 
       /* Draw scale for 100m */
 
-      SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+      SDL_SetRenderDrawColor(renderer, fgcol.r, fgcol.g, fgcol.b, fgcol.a);
       SDL_RenderDrawLine(renderer, 3, 3, 3 + 100 / scale, 3);
 
       /* Draw the evader radius if this simulation has a bounded play region. */
@@ -436,7 +450,7 @@ void render_graph(SDL_Renderer *renderer, agent_t *agents, size_t n, size_t m,
 
   /* Draw graph connections in white to the window renderer */
 
-  SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+  SDL_SetRenderDrawColor(renderer, fgcol.r, fgcol.g, fgcol.b, fgcol.a);
 
   /* NOTE: When rendering, we assume that each agent can be connected to each
    * other agent (i.e., evader-evader pairings are now allowed)

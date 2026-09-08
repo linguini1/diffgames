@@ -35,6 +35,7 @@ CONTROLS:
     q           Quit the game.
     n           Show network connections.
     p           Pause the game.
+    i           Invert background colour (for figures).
     Esc         Quit the game.
     Space       Re-start the game.
     

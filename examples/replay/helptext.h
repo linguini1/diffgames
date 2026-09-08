@@ -15,7 +15,7 @@
 " for severed connection in dB. Overrides the\n                value in the s" \
 "imulation file.\n\nCONTROLS:\n    This game is visualized using SDL2 and acc" \
 "epts keyboard input.\n\n    q           Quit the game.\n    n           Show" \
-" network connections.\n    p           Pause the game.\n    Esc         Quit" \
-" the game.\n    Space       Re-start the game.\n    \n    Scrolling the mous" \
-"e wheel adjusts the scale of the render. Click and drag to\n    move the vie" \
-"w.\n"
+" network connections.\n    p           Pause the game.\n    i           Inve" \
+"rt background colour (for figures).\n    Esc         Quit the game.\n    Spa" \
+"ce       Re-start the game.\n    \n    Scrolling the mouse wheel adjusts the" \
+" scale of the render. Click and drag to\n    move the view.\n"
