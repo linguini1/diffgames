@@ -36,6 +36,7 @@ CONTROLS:
     n           Show network connections.
     p           Pause the game.
     i           Invert background colour (for figures).
+    r           Export the current frame as a LaTeX tikz graph to the console.
     Esc         Quit the game.
     Space       Re-start the game.
     
