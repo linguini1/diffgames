@@ -16,6 +16,7 @@
 "imulation file.\n\nCONTROLS:\n    This game is visualized using SDL2 and acc" \
 "epts keyboard input.\n\n    q           Quit the game.\n    n           Show" \
 " network connections.\n    p           Pause the game.\n    i           Inve" \
-"rt background colour (for figures).\n    Esc         Quit the game.\n    Spa" \
-"ce       Re-start the game.\n    \n    Scrolling the mouse wheel adjusts the" \
-" scale of the render. Click and drag to\n    move the view.\n"
+"rt background colour (for figures).\n    r           Export the current fram" \
+"e as a LaTeX tikz graph to the console.\n    Esc         Quit the game.\n   " \
+" Space       Re-start the game.\n    \n    Scrolling the mouse wheel adjusts" \
+" the scale of the render. Click and drag to\n    move the view.\n"

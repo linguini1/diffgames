@@ -35,6 +35,10 @@ static double ploss(const agent_t *a1, const agent_t *a2) {
   return 20.0 * log10((4 * M_PI / LAMBDA) * vec3d_dist_r(&a1->pos, &a2->pos));
 }
 
+static double inverse_ploss(double ploss) {
+  return pow(10.0, ploss / 20.0) / (4 * M_PI / LAMBDA);
+}
+
 static char *parse_param(char *line) {
   char *token = strtok(line, "=");
   if (token == NULL) return token;
@@ -46,6 +50,10 @@ void render_agents(SDL_Renderer *renderer, agent_t *agents, size_t n, size_t m,
 void render_graph(SDL_Renderer *renderer, agent_t *agents, size_t n, size_t m,
                   vec2d_t *screen_offset, double scale, double ploss_limit);
 
+static void tikz_render(FILE *sink, const char *fpath, const agent_t *agents,
+                        size_t n, size_t m, double ploss_limit, double r_max,
+                        double scale);
+
 static int parse_record(char *buf, agent_t *agent);
 
 int main(int argc, char **argv) {
@@ -55,7 +63,7 @@ int main(int argc, char **argv) {
   SDL_DisplayMode dm = {0};
   SDL_DisplayMode tempdm;
   SDL_Event event;
-  char *filename = NULL;
+  const char *filename = NULL;
   char buf[BUFSIZ];
   size_t n = 0;
   size_t m = 0;
@@ -296,6 +304,13 @@ int main(int argc, char **argv) {
           SDL_RenderPresent(renderer);
           break;
 
+        case SDLK_r:
+          /* Render the current game state as a tikz figure */
+
+          tikz_render(stdout, filename, agents, n, m, ploss_limit, r_max,
+                      scale);
+          break;
+
         default:
           break;
         }
@@ -479,4 +494,119 @@ void render_graph(SDL_Renderer *renderer, agent_t *agents, size_t n, size_t m,
       }
     }
   }
+}
+
+static void tikz_agent_ref(FILE *sink, const agent_t *agent, bool pursuer) {
+  if (pursuer) {
+    fprintf(sink, "(P%zu)", agent->id + 1);
+  } else {
+    fprintf(sink, "(E%zu)", agent->id + 1);
+  }
+}
+
+static void tikz_agent_label(FILE *sink, const agent_t *agent, bool pursuer) {
+  if (pursuer) {
+    fprintf(sink, "P_{%zu}", agent->id + 1);
+  } else {
+    fprintf(sink, "E_{%zu}", agent->id + 1);
+  }
+}
+
+static void tikz_agent_definition(FILE *sink, const agent_t *agent,
+                                  bool pursuer, double scale) {
+  fprintf(sink, "\\coordinate [label=\\textcolor{black}{$");
+  tikz_agent_label(sink, agent, pursuer);
+  fprintf(sink, "$}] ");
+  tikz_agent_ref(sink, agent, pursuer);
+  fprintf(sink, "at (%.2f, %.2f);\n", agent->pos.x / scale,
+          agent->pos.y / scale);
+}
+
+static void tikz_edge(FILE *sink, const agent_t *a1, const agent_t *a2,
+                      bool a1p, bool a2p) {
+  fprintf(sink, "\\draw ");
+  tikz_agent_ref(sink, a1, a1p);
+  fprintf(sink, " -- ");
+  tikz_agent_ref(sink, a2, a2p);
+  fprintf(sink, ";\n");
+}
+
+static void tikz_agent_dot(FILE *sink, const agent_t *agent, bool pursuer) {
+  fprintf(sink, "\\fill[%s,opacity=0.5] ", pursuer ? "red" : "green");
+  tikz_agent_ref(sink, agent, pursuer);
+  fprintf(sink, " circle [radius=\\agentdot];\n");
+}
+
+static void tikz_agent_radius(FILE *sink, const agent_t *agent, bool pursuer,
+                              double ploss_limit, double scale) {
+  double radius = inverse_ploss(ploss_limit) / scale;
+  fprintf(sink, "\\draw[line width=\\agentrad,loosely dotted] ");
+  tikz_agent_ref(sink, agent, pursuer);
+  fprintf(sink, " circle [radius=%.2f];\n", radius);
+}
+
+static void tikz_draw_radius(FILE *sink, const vec2d_t *center, float radius,
+                             double scale) {
+  fprintf(sink, "\\draw (%.2f, %.2f) circle [radius=%.2f];\n",
+          center->x / scale, center->y / scale, radius / scale);
+}
+
+static void tikz_render(FILE *sink, const char *fpath, const agent_t *agents,
+                        size_t n, size_t m, double ploss_limit, double r_max,
+                        double scale) {
+  fprintf(sink,
+          "\\begin{tikzpicture}[x=1pt, y=1pt] %% Tweak units for scale\n");
+  fprintf(sink, "%% Replay of '%s'\n\n", fpath);
+  fprintf(sink, "\\def\\agentdot{2pt} %% Change agent dot size\n");
+  fprintf(sink, "\\def\\agentrad{2pt} %% Change agent radius line thickness\n");
+  fprintf(sink, "\\def\\drawagentradii{1 < 0} %% Draw agent connection radii "
+                "(false)\n\n");
+  fprintf(sink, "%% Agent coordinate locations\n\n");
+
+  /* Begin by defining agents with coordinates */
+
+  for (size_t i = 0; i < n + m; i++) {
+    tikz_agent_definition(sink, &agents[i], i < n, scale);
+  }
+
+  fprintf(sink, "\n%% Agent connection edges\n\n");
+
+  /* For every existing agent connection, let's draw an edge */
+
+  for (size_t i = 0; i < n + m; i++) {
+    for (size_t j = 0; j < n + m; j++) {
+      if (i == j) continue; /* No self-self considerations */
+
+      /* Calculate path loss and draw a line if within limit */
+
+      if (ploss(&agents[i], &agents[j]) <= ploss_limit) {
+        tikz_edge(sink, &agents[i], &agents[j], i < n, j < n);
+      }
+    }
+  }
+
+  /* Give each agent a coloured dot to represent its type */
+
+  fprintf(sink, "\n%% Agent dots\n\n");
+
+  for (size_t i = 0; i < n + m; i++) {
+    tikz_agent_dot(sink, &agents[i], i < n);
+  }
+
+  /* Draw agent connection radius */
+
+  fprintf(sink, "\n%% Agent connection radius\n\n");
+
+  fprintf(sink, "\\ifthenelse{\\drawagentradii}{\n");
+  for (size_t i = 0; i < n + m; i++) {
+    tikz_agent_radius(sink, &agents[i], i < n, ploss_limit, scale);
+  }
+  fprintf(sink, "}{}\n");
+
+  /* Draw overall radius */
+
+  fprintf(sink, "\n%% Bounded region\n\n");
+  tikz_draw_radius(sink, &(vec2d_t)VEC2D_SINIT(0, 0), r_max, scale);
+
+  fprintf(sink, "\\end{tikzpicture}\n");
 }
