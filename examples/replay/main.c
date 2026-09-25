@@ -518,7 +518,7 @@ static void tikz_agent_definition(FILE *sink, const agent_t *agent,
   tikz_agent_label(sink, agent, pursuer);
   fprintf(sink, "$}] ");
   tikz_agent_ref(sink, agent, pursuer);
-  fprintf(sink, "at (%.2f, %.2f);\n", agent->pos.x / scale,
+  fprintf(sink, " at (%.2f, %.2f);\n", agent->pos.x / scale,
           agent->pos.y / scale);
 }
 
