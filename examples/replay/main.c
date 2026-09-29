@@ -31,6 +31,15 @@ typedef struct {
   vec3d_t pos;
 } agent_t;
 
+/* Represents the header information in a simulation file */
+
+typedef struct {
+  size_t n;           /* Number of pursuers */
+  size_t m;           /* Number of evaders */
+  double r_max;       /* Bounded region radius */
+  double ploss_limit; /* Path loss limit */
+} headers_t;
+
 static double ploss(const agent_t *a1, const agent_t *a2) {
   return 20.0 * log10((4 * M_PI / LAMBDA) * vec3d_dist_r(&a1->pos, &a2->pos));
 }
@@ -45,6 +54,60 @@ static char *parse_param(char *line) {
   return strtok(NULL, "=");
 }
 
+static int parse_headers(FILE *file, headers_t *headers) {
+  char buf[BUFSIZ];
+  char *token;
+
+  fgets(buf, sizeof(buf), file);
+  token = parse_param(buf);
+  if (token == NULL) {
+    fprintf(stderr, "Expected token for 'n', got nothing.\n");
+    return EXIT_FAILURE;
+  }
+  headers->n = strtoul(token, NULL, 10);
+
+  fgets(buf, sizeof(buf), file);
+  token = parse_param(buf);
+  if (token == NULL) {
+    fprintf(stderr, "Expected token for 'm', got nothing.\n");
+    return EXIT_FAILURE;
+  }
+  headers->m = strtoul(token, NULL, 10);
+
+  fgets(buf, sizeof(buf), file);
+  token = parse_param(buf);
+  if (token == NULL) {
+    fprintf(stderr,
+            "Expected token for r_max for this simulation, skipping render.\n");
+    return EXIT_FAILURE;
+  }
+  headers->r_max = strtold(token, NULL);
+
+  /* Skip z_ground, z_uav */
+
+  fgets(buf, sizeof(buf), file);
+  fgets(buf, sizeof(buf), file);
+
+  fgets(buf, sizeof(buf), file);
+  token = parse_param(buf);
+  if (isnan(headers->ploss_limit) && token != NULL) {
+    headers->ploss_limit = strtold(token, NULL);
+  }
+
+  /* Skip dt, weight, kron */
+
+  fgets(buf, sizeof(buf), file);
+  fgets(buf, sizeof(buf), file);
+  fgets(buf, sizeof(buf), file);
+
+  if (headers->n <= 0 || headers->m <= 0) {
+    fprintf(stderr, "Invalid premise, n or m is <= 0\n");
+    return EXIT_FAILURE;
+  }
+
+  return EXIT_SUCCESS;
+}
+
 void render_agents(SDL_Renderer *renderer, agent_t *agents, size_t n, size_t m,
                    vec2d_t *screen_offset, double scale);
 void render_graph(SDL_Renderer *renderer, agent_t *agents, size_t n, size_t m,
@@ -57,16 +120,16 @@ static void tikz_render(FILE *sink, const char *fpath, const agent_t *agents,
 static int parse_record(char *buf, agent_t *agent);
 
 int main(int argc, char **argv) {
-  double ploss_limit = NAN;
   double scale = 5.0;
-  double r_max = NAN;
   SDL_DisplayMode dm = {0};
   SDL_DisplayMode tempdm;
   SDL_Event event;
+  headers_t hdr = {
+      .ploss_limit = NAN,
+      .r_max = NAN,
+  };
   const char *filename = NULL;
-  char buf[BUFSIZ];
-  size_t n = 0;
-  size_t m = 0;
+  char g_buf[BUFSIZ];
   size_t timestep = 0;
   bool running = true;
   bool game_over = false;
@@ -108,7 +171,7 @@ int main(int argc, char **argv) {
       timestep = strtoul(optarg, NULL, 10);
       break;
     case 'l':
-      ploss_limit = strtold(optarg, NULL);
+      hdr.ploss_limit = strtold(optarg, NULL);
       break;
     case 'e':
       exit_on_completion = true;
@@ -137,59 +200,13 @@ int main(int argc, char **argv) {
    * TODO: no error handling,
    */
 
-  char *token;
-
-  fgets(buf, sizeof(buf), file);
-  token = parse_param(buf);
-  if (token == NULL) {
-    fprintf(stderr, "Expected token for 'n', got nothing.\n");
-    return EXIT_FAILURE;
-  }
-  n = strtoul(token, NULL, 10);
-
-  fgets(buf, sizeof(buf), file);
-  token = parse_param(buf);
-  if (token == NULL) {
-    fprintf(stderr, "Expected token for 'm', got nothing.\n");
-    return EXIT_FAILURE;
-  }
-  m = strtoul(token, NULL, 10);
-
-  fgets(buf, sizeof(buf), file);
-  token = parse_param(buf);
-  if (token == NULL) {
-    fprintf(stderr,
-            "Expected token for r_max for this simulation, skipping render.\n");
-    return EXIT_FAILURE;
-  }
-  r_max = strtold(token, NULL);
-
-  /* Skip z_ground, z_uav */
-
-  fgets(buf, sizeof(buf), file);
-  fgets(buf, sizeof(buf), file);
-
-  fgets(buf, sizeof(buf), file);
-  token = parse_param(buf);
-  if (isnan(ploss_limit) && token != NULL) {
-    ploss_limit = strtold(token, NULL);
-  }
-
-  /* Skip dt, weight, kron */
-
-  fgets(buf, sizeof(buf), file);
-  fgets(buf, sizeof(buf), file);
-  fgets(buf, sizeof(buf), file);
-
-  if (n <= 0 || m <= 0) {
-    fprintf(stderr, "Invalid premise, n or m is <= 0\n");
-    fclose(file);
+  if (parse_headers(file, &hdr) != 0) {
     return EXIT_FAILURE;
   }
 
   /* Allocate arrays for agents */
 
-  agent_t *agents = malloc(sizeof(agent_t) * (n + m));
+  agent_t *agents = malloc(sizeof(agent_t) * (hdr.n + hdr.m));
   if (agents == NULL) {
     fprintf(stderr, "Could not allocate memory for agents.\n");
     fclose(file);
@@ -294,7 +311,7 @@ int main(int argc, char **argv) {
           break;
         case SDLK_SPACE:
           fseek(file, 0, SEEK_SET);
-          fgets(buf, sizeof(buf), file); /* Skip headers */
+          parse_headers(file, &hdr); /* Skip headers */
           game_over = false;
           SDL_SetRenderDrawColor(renderer, bgcol.r, bgcol.g, bgcol.b, bgcol.a);
           SDL_SetRenderTarget(renderer, agent_txtr); /* Clear agents */
@@ -307,8 +324,8 @@ int main(int argc, char **argv) {
         case SDLK_r:
           /* Render the current game state as a tikz figure */
 
-          tikz_render(stdout, filename, agents, n, m, ploss_limit, r_max,
-                      scale);
+          tikz_render(stdout, filename, agents, hdr.n, hdr.m, hdr.ploss_limit,
+                      hdr.r_max, scale);
           break;
 
         default:
@@ -335,13 +352,15 @@ int main(int argc, char **argv) {
 
     /* Populate agents with current time step */
 
-    for (size_t i = 0; i < n + m && !game_over && !paused; i++) {
-      fgets(buf, sizeof(buf), file);
+    for (size_t i = 0; i < hdr.n + hdr.m && !game_over && !paused; i++) {
+      fgets(g_buf, sizeof(g_buf), file);
       if (feof(file)) {
         game_over = true;
         break;
       }
-      parse_record(buf, &agents[i]);
+
+      parse_record(g_buf, &agents[i]);
+      assert(i == agents[i].id); /* This is the assumption we make */
     }
 
     if (!paused) {
@@ -354,7 +373,7 @@ int main(int argc, char **argv) {
       SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
       SDL_RenderFillRect(renderer, &fullscreen);
 
-      render_agents(renderer, agents, n, m, &comb_offset, scale);
+      render_agents(renderer, agents, hdr.n, hdr.m, &comb_offset, scale);
       SDL_SetRenderTarget(renderer, NULL); /* Switch back to window */
 
       /* Clear window renderer entirely with black */
@@ -374,20 +393,22 @@ int main(int argc, char **argv) {
 
       /* Draw the evader radius if this simulation has a bounded play region. */
 
-      if (!isnan(r_max)) {
+      if (!isnan(hdr.r_max)) {
         vec2d_t center = comb_offset;
         center.x /= scale;
         center.y /= scale;
-        render_circle(renderer, &center, r_max / scale, 50);
+        render_circle(renderer, &center, hdr.r_max / scale, 50);
       }
 
       /* Render network graph if selected to show the network */
 
       if (show_network) {
-        render_graph(renderer, agents, n, m, &comb_offset, scale, ploss_limit);
+        render_graph(renderer, agents, hdr.n, hdr.m, &comb_offset, scale,
+                     hdr.ploss_limit);
 
         /* We also draw just the most recent agent positions over top */
-        render_agents(renderer, agents, n, m, &comb_offset, scale);
+
+        render_agents(renderer, agents, hdr.n, hdr.m, &comb_offset, scale);
       }
     }
 
