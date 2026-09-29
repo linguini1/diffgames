@@ -535,7 +535,7 @@ static void tikz_agent_label(FILE *sink, const agent_t *agent, bool pursuer) {
 
 static void tikz_agent_definition(FILE *sink, const agent_t *agent,
                                   bool pursuer, double scale) {
-  fprintf(sink, "\\coordinate [label=\\textcolor{black}{$");
+  fprintf(sink, "\\coordinate [label=above:\\textcolor{black}{$");
   tikz_agent_label(sink, agent, pursuer);
   fprintf(sink, "$}] ");
   tikz_agent_ref(sink, agent, pursuer);
