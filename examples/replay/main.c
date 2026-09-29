@@ -38,6 +38,7 @@ typedef struct {
   size_t m;           /* Number of evaders */
   double r_max;       /* Bounded region radius */
   double ploss_limit; /* Path loss limit */
+  double dt;          /* Time step duration */
 } headers_t;
 
 static double ploss(const agent_t *a1, const agent_t *a2) {
@@ -94,9 +95,14 @@ static int parse_headers(FILE *file, headers_t *headers) {
     headers->ploss_limit = strtold(token, NULL);
   }
 
-  /* Skip dt, weight, kron */
+  /* Parse delta time */
 
   fgets(buf, sizeof(buf), file);
+  token = parse_param(buf);
+  headers->dt = strtold(token, NULL);
+
+  /* Skip weight, kron */
+
   fgets(buf, sizeof(buf), file);
   fgets(buf, sizeof(buf), file);
 
@@ -115,7 +121,7 @@ void render_graph(SDL_Renderer *renderer, agent_t *agents, size_t n, size_t m,
 
 static void tikz_render(FILE *sink, const char *fpath, const agent_t *agents,
                         size_t n, size_t m, double ploss_limit, double r_max,
-                        double scale);
+                        double curtime, double scale);
 
 static int parse_record(char *buf, agent_t *agent);
 
@@ -131,6 +137,7 @@ int main(int argc, char **argv) {
   const char *filename = NULL;
   char g_buf[BUFSIZ];
   size_t timestep = 0;
+  double curtime = 0;
   bool running = true;
   bool game_over = false;
   bool exit_on_completion = false;
@@ -312,6 +319,7 @@ int main(int argc, char **argv) {
         case SDLK_SPACE:
           fseek(file, 0, SEEK_SET);
           parse_headers(file, &hdr); /* Skip headers */
+          curtime = 0;
           game_over = false;
           SDL_SetRenderDrawColor(renderer, bgcol.r, bgcol.g, bgcol.b, bgcol.a);
           SDL_SetRenderTarget(renderer, agent_txtr); /* Clear agents */
@@ -325,7 +333,7 @@ int main(int argc, char **argv) {
           /* Render the current game state as a tikz figure */
 
           tikz_render(stdout, filename, agents, hdr.n, hdr.m, hdr.ploss_limit,
-                      hdr.r_max, scale);
+                      hdr.r_max, curtime, scale);
           break;
 
         default:
@@ -362,6 +370,8 @@ int main(int argc, char **argv) {
       parse_record(g_buf, &agents[i]);
       assert(i == agents[i].id); /* This is the assumption we make */
     }
+
+    curtime += hdr.dt; /* Record the current time step */
 
     if (!paused) {
 
@@ -574,10 +584,11 @@ static void tikz_draw_radius(FILE *sink, const vec2d_t *center, float radius,
 
 static void tikz_render(FILE *sink, const char *fpath, const agent_t *agents,
                         size_t n, size_t m, double ploss_limit, double r_max,
-                        double scale) {
+                        double curtime, double scale) {
   fprintf(sink,
           "\\begin{tikzpicture}[x=1pt, y=1pt] %% Tweak units for scale\n");
-  fprintf(sink, "%% Replay of '%s'\n\n", fpath);
+  fprintf(sink, "%% Replay of '%s'\n", fpath);
+  fprintf(sink, "%% Snapshot time: %.2lf s\n\n", curtime);
   fprintf(sink, "\\def\\agentdot{2pt} %% Change agent dot size\n");
   fprintf(sink, "\\def\\agentrad{2pt} %% Change agent radius line thickness\n");
   fprintf(sink, "\\def\\drawagentradii{1 < 0} %% Draw agent connection radii "
