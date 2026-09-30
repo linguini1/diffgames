@@ -1,3 +1,4 @@
+#include <corecrt_search.h>
 #include <errno.h>
 #include <getopt.h>
 #include <math.h>
@@ -13,6 +14,7 @@
 #include "3dtools.h"
 #include "helptext.h"
 #include "render.h"
+#include "tikz.h"
 #include "utils.h"
 
 const char WINDOW_NAME[] = "Replay";
@@ -585,8 +587,9 @@ static void tikz_draw_radius(FILE *sink, const vec2d_t *center, float radius,
 static void tikz_render(FILE *sink, const char *fpath, const agent_t *agents,
                         size_t n, size_t m, double ploss_limit, double r_max,
                         double curtime, double scale) {
-  fprintf(sink,
-          "\\begin{tikzpicture}[x=1pt, y=1pt] %% Tweak units for scale\n");
+
+  tikz_picture_start(sink, NULL, NULL);
+
   fprintf(sink, "%% Replay of '%s'\n", fpath);
   fprintf(sink, "%% Snapshot time: %.2lf s\n\n", curtime);
   fprintf(sink, "\\def\\agentdot{2pt} %% Change agent dot size\n");
@@ -640,5 +643,5 @@ static void tikz_render(FILE *sink, const char *fpath, const agent_t *agents,
   fprintf(sink, "\n%% Bounded region\n\n");
   tikz_draw_radius(sink, &(vec2d_t)VEC2D_SINIT(0, 0), r_max, scale);
 
-  fprintf(sink, "\\end{tikzpicture}\n");
+  tikz_picture_end(sink);
 }
